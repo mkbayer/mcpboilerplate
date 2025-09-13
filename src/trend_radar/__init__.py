@@ -24,3 +24,8 @@ __all__ = [
     "MCPMessageType"
 ]
 
+if __name__ == "__main__":
+    print("TrendRadarOrchestrator:", TrendRadarOrchestrator)
+    print("Trend:", Trend)
+    print("MCPMessage:", MCPMessage)
+

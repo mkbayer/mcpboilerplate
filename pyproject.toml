@@ -8,7 +8,6 @@ version = "1.0.0"
 description = "A Model Context Protocol demonstration with trend radar analysis using four specialized agents"
 readme = "README.md"
 requires-python = ">=3.8"
-
 authors = [
     {name = "Trend Radar Team"},
 ]
@@ -59,7 +58,7 @@ Repository = "https://github.com/your-org/trend-radar-mcp"
 "Bug Tracker" = "https://github.com/your-org/trend-radar-mcp/issues"
 
 [project.scripts]
-trend-radar = "trend_radar.main:app"
+trend-radar = "trend_radar.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trend_radar"]

@@ -343,33 +343,111 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ### Common Issues
 
-1. **"Connection refused" errors**:
-   - Ensure Ollama is running: `ollama serve`
-   - Check if gpt-oss:20b is pulled: `ollama list`
+1. **"Module not found" errors**:
+   ```bash
+   # Try running from project root directory
+   cd trend-radar-mcp
+   python -m trend_radar.main analyze "your query"
+   
+   # Or use the quick start script
+   ./run_trend_analysis.py analyze "your query"
+   
+   # Or install dependencies
+   uv sync
+   ```
 
-2. **"Model not found" errors**:
-   - Pull the model: `ollama pull gpt-oss:20b`
-   - Verify model name in configuration
+2. **"Connection refused" errors**:
+   ```bash
+   # Ensure Ollama is running
+   ollama serve
+   
+   # Check if gpt-oss:20b is pulled
+   ollama list
+   
+   # Pull the model if missing
+   ollama pull gpt-oss:20b
+   ```
 
-3. **Slow performance**:
-   - Reduce analysis depth to "light"
-   - Check system resources (RAM, CPU)
-   - Ensure adequate GPU/CPU for model
+3. **"Model not found" errors**:
+   ```bash
+   # Pull the model
+   ollama pull gpt-oss:20b
+   
+   # Verify model name in configuration
+   python -m trend_radar.main analyze "test" --model gpt-oss:20b
+   ```
 
-4. **Import errors**:
-   - Reinstall dependencies: `uv sync --reinstall`
-   - Check Python version compatibility (>=3.8)
+4. **"Command not found: trend-radar"**:
+   ```bash
+   # Install the package first
+   uv pip install -e .
+   
+   # Or use direct execution methods
+   python -m trend_radar.main analyze "your query"
+   
+   # Or use the quick start script
+   ./run_trend_analysis.py analyze "your query"
+   ```
+
+5. **Permission errors with run script**:
+   ```bash
+   # Make the script executable
+   chmod +x run_trend_analysis.py
+   
+   # Or run with python directly
+   python run_trend_analysis.py analyze "your query"
+   ```
+
+6. **Slow performance**:
+   ```bash
+   # Reduce analysis depth to "light"
+   python -m trend_radar.main analyze "query" --depth light
+   
+   # Check system resources (RAM, CPU)
+   # Ensure adequate GPU/CPU for model
+   ```
+
+7. **Import errors**:
+   ```bash
+   # Reinstall dependencies
+   uv sync --reinstall
+   
+   # Check Python version compatibility (>=3.8)
+   python --version
+   
+   # Try running from correct directory
+   cd trend-radar-mcp
+   ```
 
 ### Debug Mode
 
 Enable verbose logging:
 ```bash
-PYTHONPATH=src python -m trend_radar.main analyze "your query" --help
+# Set environment variable for debug logging
+export PYTHONPATH=src
+python -c "
+from trend_radar.utils.logger import configure_root_logger
+configure_root_logger('DEBUG', use_rich=True)
+import asyncio
+from trend_radar.main import run_trend_analysis
+asyncio.run(run_trend_analysis('debug test', {'base_url': 'http://localhost:11434', 'model': 'gpt-oss:20b'}, {'depth': 'light'}))
+"
 ```
 
-Or set log level in code:
-```python
-configure_root_logger("DEBUG", use_rich=True)
+### Test the Installation
+
+```bash
+# Quick test to verify everything works
+./run_trend_analysis.py health-check
+
+# Or
+python -m trend_radar.main health-check
+
+# Run the demo to test full functionality
+./run_trend_analysis.py demo
+
+# Or
+python -m trend_radar.main demo
 ```
 
 ## 📞 Support

@@ -415,16 +415,21 @@ async def run_interactive_session():
 def main():
     """Main entry point for the application"""
     
-    # Check if we're being run directly
+    # Check if we're being run directly with no arguments
     if len(sys.argv) == 1:
         # No arguments provided, show help
         console.print(Panel.fit(
             "🎯 [bold blue]Trend Radar MCP Application[/bold blue]\n\n" +
-            "Use --help to see available commands\n" +
-            "Quick start: [green]trend-radar analyze \"your query here\"[/green]",
+            "Available commands:\n" +
+            "• [green]analyze[/green] - Run trend analysis\n" +
+            "• [green]interactive[/green] - Launch interactive session\n" +
+            "• [green]health-check[/green] - Check system health\n" +
+            "• [green]demo[/green] - Run demonstration\n\n" +
+            "Use --help with any command for more details\n" +
+            "Example: [cyan]python -m trend_radar.main analyze \"AI trends\"[/cyan]",
             border_style="blue"
         ))
-        console.print("\n💡 [yellow]Tip: Run 'trend-radar interactive' for guided analysis[/yellow]")
+        console.print("\n💡 [yellow]Tip: Run 'python -m trend_radar.main interactive' for guided analysis[/yellow]")
         return
     
     # Run the Typer app

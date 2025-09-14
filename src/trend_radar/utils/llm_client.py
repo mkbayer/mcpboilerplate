@@ -3,7 +3,7 @@ LLM client for interfacing with local Ollama gpt-oss:20b model.
 """
 
 import asyncio
-import aiohttp
+import httpx
 from typing import Dict, Optional, Any
 from ..utils.logger import get_logger
 
@@ -22,19 +22,19 @@ class LLMClient:
         self.base_url = base_url
         self.model = model
         self.timeout = timeout
-        self.session = None
+        self.client = None
     
     async def __aenter__(self):
         """Async context manager entry"""
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.timeout)
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout)
         )
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
-        if self.session:
-            await self.session.close()
+        if self.client:
+            await self.client.aclose()
     
     async def generate(
         self,
@@ -57,7 +57,7 @@ class LLMClient:
         Returns:
             Generated text response
         """
-        if not self.session:
+        if not self.client:
             raise RuntimeError("LLMClient must be used as async context manager")
         
         # Prepare the full prompt
@@ -82,15 +82,15 @@ class LLMClient:
         
         try:
             logger.debug(f"Sending request to {self.base_url}/api/generate")
-            async with self.session.post(
+            response = await self.client.post(
                 f"{self.base_url}/api/generate",
                 json=payload
-            ) as response:
-                response.raise_for_status()
-                result = await response.json()
-                return result.get("response", "").strip()
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("response", "").strip()
                 
-        except aiohttp.ClientError as e:
+        except httpx.RequestError as e:
             logger.error(f"HTTP error during LLM request: {e}")
             raise ConnectionError(f"Failed to connect to LLM service: {e}")
         except asyncio.TimeoutError:
@@ -146,19 +146,19 @@ class LLMClient:
         Returns:
             True if service is healthy, False otherwise
         """
-        if not self.session:
-            self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
+        if not self.client:
+            self.client = httpx.AsyncClient(
+                timeout=httpx.Timeout(10)
             )
         
         try:
-            async with self.session.get(f"{self.base_url}/api/tags") as response:
-                response.raise_for_status()
-                tags = await response.json()
-                
-                # Check if our model is available
-                models = [model.get('name', '') for model in tags.get('models', [])]
-                return self.model in models
+            response = await self.client.get(f"{self.base_url}/api/tags")
+            response.raise_for_status()
+            tags = response.json()
+            
+            # Check if our model is available
+            models = [model.get('name', '') for model in tags.get('models', [])]
+            return self.model in models
                 
         except Exception as e:
             logger.error(f"Health check failed: {e}")

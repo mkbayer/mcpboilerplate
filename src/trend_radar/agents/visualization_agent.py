@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Tuple
 import json
 from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
-from  mcpboilerplate.src.trend_radar.models.trend import RadarPoint
+from  trend_radar.models.trend import RadarPoint
 
 
 class VisualizationAgent(MCPAgent):

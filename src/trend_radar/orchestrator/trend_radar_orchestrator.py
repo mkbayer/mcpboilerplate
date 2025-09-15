@@ -77,17 +77,54 @@ class TrendRadarOrchestrator:
         config = analysis_config or {}
         correlation_id = f"{self.session_id}-{int(datetime.utcnow().timestamp())}"
         start = datetime.utcnow()
+        
         try:
-            await self._verify_agent_health()
-            result = await self._execute_analysis_pipeline(query, config, correlation_id)
+            # Log start of analysis
+            logger.info(f"Starting trend analysis for query: {query}")
+            logger.debug(f"Analysis config: {json.dumps(config, indent=2)}")
+            
+            # Verify agents before starting
+            try:
+                await self._verify_agent_health()
+            except Exception as e:
+                logger.error(f"Agent health check failed: {str(e)}")
+                raise RuntimeError(f"Agent initialization error: {str(e)}")
+
+            # Execute pipeline with detailed logging
+            try:
+                result = await self._execute_analysis_pipeline(query, config, correlation_id)
+                if not result:
+                    raise RuntimeError("Pipeline returned empty result")
+            except Exception as e:
+                logger.exception("Pipeline execution failed")
+                raise RuntimeError(f"Pipeline error: {str(e)}")
+
+            # Calculate and update metrics
             elapsed = (datetime.utcnow() - start).total_seconds()
             self._update_performance_metrics(elapsed, True)
+            
+            logger.info(f"Analysis completed successfully in {elapsed:.2f}s")
             return result
+            
         except Exception as e:
             elapsed = (datetime.utcnow() - start).total_seconds()
             self._update_performance_metrics(elapsed, False)
-            logger.error(f"Analysis orchestration failed: {e}")
-            raise
+            
+            # Detailed error logging
+            logger.error("Analysis failed!")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Config: {json.dumps(config, indent=2)}")
+            
+            # Get agent status for debugging
+            try:
+                status = await self.get_agent_status()
+                logger.error(f"Agent status at failure: {json.dumps(status, indent=2)}")
+            except:
+                pass
+                
+            raise RuntimeError(f"Analysis failed: {str(e)}")
 
 
     async def _verify_agent_health(self) -> None:

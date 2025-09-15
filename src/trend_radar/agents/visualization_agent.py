@@ -7,14 +7,14 @@ from typing import Dict, Any, List, Tuple
 import json
 from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
-from  trend_radar.models.trend import RadarPoint
+from ..models.trend import RadarPoint
 
 
 class VisualizationAgent(MCPAgent):
     """Agent specialized in creating trend radar visualizations and charts"""
     
-    def __init__(self, **kwargs):
-        super().__init__("visualization_agent", **kwargs)
+    def __init__(self, llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
+        super().__init__("visualization_agent", llm_base_url=llm_base_url, model_name=model_name)
         
         # Visualization configuration
         self.color_schemes = {

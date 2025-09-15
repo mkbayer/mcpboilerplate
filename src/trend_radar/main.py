@@ -96,7 +96,7 @@ def health_check(
     """
     console.print("🏥 [bold yellow]Performing Health Check...[/bold yellow]")
     
-    llm_config = {"base_url": llm_url, "model": model}
+    llm_config = { "model": model}
     
     health_status = asyncio.run(check_system_health(llm_config, verbose))
     

@@ -11,8 +11,8 @@ from ..models.mcp_message import AgentCapability
 class DataCollectorAgent(MCPAgent):
     """Agent specialized in collecting and aggregating trend data"""
     
-    def __init__(self, **kwargs):
-        super().__init__("data_collector", **kwargs)
+    def __init__(self, llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
+        super().__init__("data_collector", llm_base_url=llm_base_url, model_name=model_name)
         self.data_sources = [
             "tech_blogs",
             "news_apis", 
@@ -338,4 +338,3 @@ class DataCollectorAgent(MCPAgent):
     def _calculate_freshness(self, trends: List[Dict[str, Any]]) -> float:
         """Calculate data freshness score (all data is fresh since just collected)"""
         return 1.0  # Perfect freshness for newly collected data
-    

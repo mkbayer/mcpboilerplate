@@ -4,15 +4,15 @@ Analysis Agent - Responsible for analyzing trends and scoring their impact, conf
 
 from datetime import datetime
 from typing import Dict, Any, List, Tuple
-from .base_agent import MCPAgent
+from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
 
 
 class AnalysisAgent(MCPAgent):
     """Agent specialized in trend analysis, scoring, and risk assessment"""
     
-    def __init__(self, **kwargs):
-        super().__init__("analysis_agent", **kwargs)
+    def __init__(self, llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
+        super().__init__("analysis_agent", llm_base_url=llm_base_url, model_name=model_name)
         
         # Analysis frameworks and methodologies
         self.impact_factors = [

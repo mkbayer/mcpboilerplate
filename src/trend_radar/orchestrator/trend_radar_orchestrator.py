@@ -29,7 +29,7 @@ class TrendRadarOrchestrator:
         """
         self.session_id = str(uuid.uuid4())
         self.llm_config = llm_config or {
-            "base_url": "http://localhost:11434",
+            # "base_url": "http://localhost:11434",
             "model": "gpt-oss:20b"
         }
         
@@ -54,10 +54,18 @@ class TrendRadarOrchestrator:
     def _initialize_agents(self) -> Dict[str, Any]:
         """Initialize all MCP agents with configuration"""
         agents = {
-            "data_collector": DataCollectorAgent(**self.llm_config),
-            "analysis_agent": AnalysisAgent(**self.llm_config),
-            "visualization_agent": VisualizationAgent(**self.llm_config),
-            "reporting_agent": ReportingAgent(**self.llm_config)
+            "data_collector": DataCollectorAgent(
+                model_name=self.llm_config["model"]
+            ),
+            "analysis_agent": AnalysisAgent(
+                model_name=self.llm_config["model"]
+            ),
+            "visualization_agent": VisualizationAgent(
+                model_name=self.llm_config["model"]
+            ),
+            "reporting_agent": ReportingAgent(
+                model_name=self.llm_config["model"]
+            )
         }
         
         # Verify agent health

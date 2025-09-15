@@ -96,7 +96,7 @@ def health_check(
     """
     console.print("🏥 [bold yellow]Performing Health Check...[/bold yellow]")
     
-    llm_config = { "model": model}
+    llm_config = {"base_url": llm_url, "model": model}
     
     health_status = asyncio.run(check_system_health(llm_config, verbose))
     
@@ -204,6 +204,15 @@ async def run_trend_analysis(
                             results, output_format, output_file
                         )
                         console.print(f"📁 Results exported to: [green]{export_path}[/green]")
+                else:
+                    # Display detailed error information
+                    error_msg = results.get("error", "Unknown error")
+                    error_type = results.get("error_type", "Unknown")
+                    console.print(f"\n❌ [red]Analysis failed ({error_type}): {error_msg}[/red]")
+                    
+                    if "traceback" in results:
+                        console.print("\n🔍 [yellow]Debug information:[/yellow]")
+                        console.print(f"[dim]{results['traceback']}[/dim]")
                 
                 return results
                 

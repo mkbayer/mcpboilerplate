@@ -3,10 +3,10 @@ Trend Radar Orchestrator - Main coordination system for MCP agents.
 """
 
 import asyncio
-import uuid
 import json
-from typing import Dict, Any, List, Optional
+import uuid
 from datetime import datetime
+from typing import Dict, Any, List, Optional
 from ..agents.data_collector import DataCollectorAgent
 from ..agents.analysis_agent import AnalysisAgent
 from ..agents.visualization_agent import VisualizationAgent
@@ -29,6 +29,7 @@ class TrendRadarOrchestrator:
         """
         self.session_id = str(uuid.uuid4())
         self.llm_config = llm_config or {
+            "base_url": "http://localhost:11434",
             "model": "gpt-oss:20b"
         }
         
@@ -41,146 +42,168 @@ class TrendRadarOrchestrator:
         self.execution_history = []
         
         # Performance tracking
-        self._metrics = {"runs": 0, "success": 0, "failures": 0, "total_time": 0.0}
+        self.performance_metrics = {
+            "total_analyses": 0,
+            "successful_analyses": 0,
+            "average_execution_time": 0.0,
+            "agent_performance": {}
+        }
+        
+        logger.info(f"TrendRadarOrchestrator initialized with session {self.session_id}")
     
-
     def _initialize_agents(self) -> Dict[str, Any]:
-        """Instantiate agent classes and return mapping. Must not return None."""
-        try:
-            base_url = self.llm_config.get("base_url", "http://localhost:11434")
-            model = self.llm_config.get("model", "gpt-oss:20b")
-            agents = {
-                "data_collector": DataCollectorAgent(llm_base_url=base_url, model_name=model),
-                "analysis_agent": AnalysisAgent(llm_base_url=base_url, model_name=model),
-                "visualization_agent": VisualizationAgent(llm_base_url=base_url, model_name=model),
-                "reporting_agent": ReportingAgent(llm_base_url=base_url, model_name=model),
-            }
-            logger.info(f"Initialized {len(agents)} agents")
-            return agents
-        except Exception as e:
-            logger.exception("Failed to initialize agents")
-            raise RuntimeError(f"Agent initialization failed: {e}") from e
-    
+        """Initialize all MCP agents with configuration"""
+        agents = {
+            "data_collector": DataCollectorAgent(
+                llm_base_url=self.llm_config["base_url"],
+                model_name=self.llm_config["model"]
+            ),
+            "analysis_agent": AnalysisAgent(
+                llm_base_url=self.llm_config["base_url"], 
+                model_name=self.llm_config["model"]
+            ),
+            "visualization_agent": VisualizationAgent(
+                llm_base_url=self.llm_config["base_url"],
+                model_name=self.llm_config["model"]
+            ),
+            "reporting_agent": ReportingAgent(
+                llm_base_url=self.llm_config["base_url"],
+                model_name=self.llm_config["model"]
+            )
+        }
+        
+        # Verify agent health
+        logger.info(f"Initialized {len(agents)} agents")
+        return agents
     
     async def receive_message(self, message: MCPMessage) -> None:
-        """Put incoming MCPMessage into internal queue for processing."""
+        """
+        Receive and queue messages from agents
+        
+        Args:
+            message: MCP message from an agent
+        """
         await self.message_queue.put(message)
-        logger.debug("Message queued", extra={"message_id": getattr(message, "id", None)})
-    
+        logger.debug(f"Received {message.message_type.value} from {message.agent_id}")
     
     async def orchestrate_trend_analysis(
         self, 
         query: str = "emerging technology trends",
         analysis_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Public entrypoint for running the full analysis pipeline."""
-        config = analysis_config or {}
-        correlation_id = f"{self.session_id}-{int(datetime.utcnow().timestamp())}"
-        start = datetime.utcnow()
+        """
+        Main orchestration workflow for comprehensive trend analysis
+        
+        Args:
+            query: Analysis query/topic
+            analysis_config: Optional configuration for analysis depth and focus
+            
+        Returns:
+            Complete analysis results with visualization and reports
+        """
+        start_time = datetime.now()
+        correlation_id = str(uuid.uuid4())
+        
+        # Default configuration
+        config = {
+            "depth": "standard",  # light, standard, deep
+            "focus_areas": ["impact", "confidence", "timeline"],
+            "report_type": "comprehensive",
+            "target_audience": "leadership"
+        }
+        config.update(analysis_config or {})
+        
+        logger.info(f"Starting trend analysis orchestration: '{query}'")
+        logger.info(f"Configuration: {config}")
         
         try:
-            # Log start of analysis
-            logger.info(f"Starting trend analysis for query: {query}")
-            logger.debug(f"Analysis config: {json.dumps(config, indent=2)}")
+            # Check agent health before starting
+            await self._verify_agent_health()
             
-            # Verify agents before starting
-            try:
-                await self._verify_agent_health()
-            except Exception as e:
-                logger.error(f"Agent health check failed: {str(e)}")
-                raise RuntimeError(f"Agent initialization error: {str(e)}")
-
-            # Execute pipeline with detailed logging
-            try:
-                result = await self._execute_analysis_pipeline(query, config, correlation_id)
-                if not result:
-                    raise RuntimeError("Pipeline returned empty result")
-            except Exception as e:
-                logger.exception("Pipeline execution failed")
-                raise RuntimeError(f"Pipeline error: {str(e)}")
-
-            # Calculate and update metrics
-            elapsed = (datetime.utcnow() - start).total_seconds()
-            self._update_performance_metrics(elapsed, True)
+            # Execute analysis pipeline
+            results = await self._execute_analysis_pipeline(query, config, correlation_id)
             
-            logger.info(f"Analysis completed successfully in {elapsed:.2f}s")
-            return result
+            # Calculate execution metrics
+            execution_time = (datetime.now() - start_time).total_seconds()
+            results["execution_metadata"] = {
+                "session_id": self.session_id,
+                "correlation_id": correlation_id,
+                "execution_time_seconds": execution_time,
+                "query": query,
+                "config": config,
+                "completed_at": datetime.now().isoformat()
+            }
+            
+            # Update performance metrics
+            self._update_performance_metrics(execution_time, True)
+            
+            logger.info(f"Analysis completed successfully in {execution_time:.2f} seconds")
+            return results
             
         except Exception as e:
-            elapsed = (datetime.utcnow() - start).total_seconds()
-            self._update_performance_metrics(elapsed, False)
+            logger.error(f"Analysis orchestration failed: {str(e)}")
+            self._update_performance_metrics(0, False)
             
-            # Detailed error logging
-            logger.error("Analysis failed!")
-            logger.error(f"Error type: {type(e).__name__}")
-            logger.error(f"Error message: {str(e)}")
-            logger.error(f"Query: {query}")
-            logger.error(f"Config: {json.dumps(config, indent=2)}")
-            
-            # Get agent status for debugging
-            try:
-                status = await self.get_agent_status()
-                logger.error(f"Agent status at failure: {json.dumps(status, indent=2)}")
-            except:
-                pass
-                
-            raise RuntimeError(f"Analysis failed: {str(e)}")
-
-
+            return {
+                "error": str(e),
+                "processing_complete": False,
+                "session_id": self.session_id,
+                "correlation_id": correlation_id,
+                "failed_at": datetime.now().isoformat()
+            }
+    
     async def _verify_agent_health(self) -> None:
-        """Lightweight health check for agents. Raises if any agent is missing."""
-        if not isinstance(self.agents, dict) or len(self.agents) == 0:
-            raise RuntimeError("No agents initialized")
-        # optional deeper checks if agents expose health/status methods
-        for name, agent in self.agents.items():
-            if agent is None:
-                raise RuntimeError(f"Agent {name} is None")
-
-
+        """Verify all agents are healthy and responsive"""
+        health_checks = []
+        
+        for agent_id, agent in self.agents.items():
+            try:
+                health_status = await agent.health_check()
+                health_checks.append((agent_id, health_status))
+                
+                if not health_status:
+                    logger.warning(f"Agent {agent_id} health check failed")
+            except Exception as e:
+                logger.error(f"Health check error for {agent_id}: {e}")
+                health_checks.append((agent_id, False))
+        
+        failed_agents = [agent_id for agent_id, status in health_checks if not status]
+        
+        if failed_agents:
+            raise RuntimeError(f"Agent health check failed for: {', '.join(failed_agents)}")
+        
+        logger.info("All agents passed health checks")
+    
     async def _execute_analysis_pipeline(
         self, 
         query: str, 
         config: Dict[str, Any], 
         correlation_id: str
     ) -> Dict[str, Any]:
-        """Execute the complete analysis pipeline with robust error handling."""
+        """Execute the complete analysis pipeline with all agents"""
         
-        pipeline_results: Dict[str, Any] = {}
+        pipeline_results = {}
         
-        def _ensure_agent(name: str):
-            agent = self.agents.get(name)
-            if agent is None:
-                raise RuntimeError(f"Agent '{name}' not initialized or missing")
-            if not hasattr(agent, "process_task"):
-                raise RuntimeError(f"Agent '{name}' does not implement process_task")
-            return agent
-
-        def _ensure_result(result: Optional[Dict[str, Any]], stage: str) -> Dict[str, Any]:
-            """Ensure we have a valid result dictionary"""
-            if result is None:
-                logger.error(f"{stage} returned None instead of dict")
-                return {}  # Return empty dict instead of None
-            if not isinstance(result, dict):
-                logger.error(f"{stage} returned {type(result)} instead of dict")
-                return {}
-            return result
-
         try:
             # Stage 1: Data Collection
             logger.info("Stage 1: Data Collection")
             collection_task = {
                 "query": query,
                 "depth": config.get("depth", "standard"),
-                "sources": config.get("sources", []),
+                "sources": config.get("sources"),
                 "task_id": f"{correlation_id}_collection"
             }
-            collection_agent = _ensure_agent("data_collector")
-            collection_result = _ensure_result(
-                await collection_agent.process_task(collection_task),
-                "Data collection"
-            )
+            
+            logger.debug(f"Data collection task: {collection_task}")
+            collection_result = await self.agents["data_collector"].process_task(collection_task)
+            logger.info(f"Data collection completed: {len(collection_result.get('raw_trends', []))} trends found")
             pipeline_results["data_collection"] = collection_result
-
+            
+        except Exception as e:
+            logger.error(f"Data collection stage failed: {e}")
+            raise RuntimeError(f"Data collection failed: {e}") from e
+        
+        try:
             # Stage 2: Trend Analysis
             logger.info("Stage 2: Trend Analysis")
             analysis_task = {
@@ -189,13 +212,17 @@ class TrendRadarOrchestrator:
                 "focus_areas": config.get("focus_areas", ["impact", "confidence", "timeline"]),
                 "task_id": f"{correlation_id}_analysis"
             }
-            analysis_agent = _ensure_agent("analysis_agent")
-            analysis_result = _ensure_result(
-                await analysis_agent.process_task(analysis_task),
-                "Trend analysis"
-            )
+            
+            logger.debug(f"Analysis task: {len(analysis_task['raw_trends'])} trends to analyze")
+            analysis_result = await self.agents["analysis_agent"].process_task(analysis_task)
+            logger.info(f"Trend analysis completed: {len(analysis_result.get('analyzed_trends', []))} trends analyzed")
             pipeline_results["trend_analysis"] = analysis_result
-
+            
+        except Exception as e:
+            logger.error(f"Trend analysis stage failed: {e}")
+            raise RuntimeError(f"Trend analysis failed: {e}") from e
+        
+        try:
             # Stage 3: Visualization Generation
             logger.info("Stage 3: Visualization Generation")
             visualization_task = {
@@ -204,13 +231,17 @@ class TrendRadarOrchestrator:
                 "config": config.get("viz_config", {}),
                 "task_id": f"{correlation_id}_visualization"
             }
-            viz_agent = _ensure_agent("visualization_agent")
-            visualization_result = _ensure_result(
-                await viz_agent.process_task(visualization_task),
-                "Visualization generation"
-            )
+            
+            logger.debug(f"Visualization task: {len(visualization_task['analyzed_trends'])} trends to visualize")
+            visualization_result = await self.agents["visualization_agent"].process_task(visualization_task)
+            logger.info(f"Visualization completed: {len(visualization_result.get('radar_data', []))} radar points generated")
             pipeline_results["visualization"] = visualization_result
-
+            
+        except Exception as e:
+            logger.error(f"Visualization stage failed: {e}")
+            raise RuntimeError(f"Visualization failed: {e}") from e
+        
+        try:
             # Stage 4: Report Generation
             logger.info("Stage 4: Report Generation")
             reporting_task = {
@@ -221,68 +252,112 @@ class TrendRadarOrchestrator:
                 "audience": config.get("target_audience", "leadership"),
                 "task_id": f"{correlation_id}_reporting"
             }
-            report_agent = _ensure_agent("reporting_agent")
-            reporting_result = _ensure_result(
-                await report_agent.process_task(reporting_task),
-                "Report generation"
-            )
+            
+            logger.debug(f"Reporting task: {len(reporting_task['radar_data'])} data points to report on")
+            reporting_result = await self.agents["reporting_agent"].process_task(reporting_task)
+            logger.info(f"Report generation completed: {len(reporting_result.get('key_insights', []))} insights generated")
             pipeline_results["report"] = reporting_result
-
-            return self._integrate_pipeline_results(pipeline_results, config)
             
         except Exception as e:
-            logger.exception(f"Pipeline execution failed at stage {len(pipeline_results) + 1}")
-            logger.error(f"Pipeline state: {json.dumps(pipeline_results, indent=2)}")
-            raise RuntimeError(f"Analysis pipeline failed: {str(e)}") from e
-
-
+            logger.error(f"Report generation stage failed: {e}")
+            raise RuntimeError(f"Report generation failed: {e}") from e
+        
+        # Compile final integrated results
+        try:
+            logger.info("Integrating pipeline results...")
+            integrated_results = self._integrate_pipeline_results(pipeline_results, config)
+            logger.info("Pipeline integration completed successfully")
+            return integrated_results
+            
+        except Exception as e:
+            logger.error(f"Pipeline integration failed: {e}")
+            raise RuntimeError(f"Pipeline integration failed: {e}") from e
+    
     def _integrate_pipeline_results(
         self, 
         pipeline_results: Dict[str, Any], 
         config: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Merge stage outputs into a coherent return structure."""
-        return {
-            "metadata": {
-                "run_id": str(uuid.uuid4()),
-                "generated_at": datetime.utcnow().isoformat(),
-                "config": config
+        """Integrate results from all pipeline stages"""
+        
+        # Extract key components
+        data_collection = pipeline_results.get("data_collection", {})
+        trend_analysis = pipeline_results.get("trend_analysis", {})
+        visualization = pipeline_results.get("visualization", {})
+        report = pipeline_results.get("report", {})
+        
+        # Create integrated result structure
+        integrated_results = {
+            "processing_complete": True,
+            "trend_radar": {
+                "data": visualization.get("radar_data", []),
+                "configuration": visualization.get("visualization_config", {}),
+                "supporting_charts": visualization.get("supporting_charts", {}),
+                "statistics": visualization.get("statistics", {})
             },
-            "data_collection": pipeline_results.get("data_collection", {}),
-            "trend_analysis": pipeline_results.get("trend_analysis", {}),
-            "visualization": pipeline_results.get("visualization", {}),
-            "report": pipeline_results.get("report", {}),
+            "analysis": {
+                "analyzed_trends": trend_analysis.get("analyzed_trends", []),
+                "cross_analysis": trend_analysis.get("cross_analysis", {}),
+                "analysis_summary": trend_analysis.get("analysis_summary", {}),
+                "quality_metrics": trend_analysis.get("quality_metrics", {})
+            },
+            "report": report,
+            "data_collection_metadata": {
+                "trends_collected": len(data_collection.get("raw_trends", [])),
+                "sources_queried": data_collection.get("collection_metadata", {}).get("sources_queried", []),
+                "collection_quality": data_collection.get("quality_metrics", {})
+            },
+            "pipeline_summary": {
+                "stages_completed": len(pipeline_results),
+                "total_trends_processed": len(trend_analysis.get("analyzed_trends", [])),
+                "visualization_points": len(visualization.get("radar_data", [])),
+                "insights_generated": len(report.get("key_insights", [])),
+                "recommendations_provided": len(report.get("strategic_recommendations", []))
+            }
         }
-    
+        
+        return integrated_results
     
     def _update_performance_metrics(self, execution_time: float, success: bool) -> None:
-        self._metrics["runs"] += 1
-        self._metrics["total_time"] += execution_time
+        """Update orchestrator performance metrics"""
+        self.performance_metrics["total_analyses"] += 1
+        
         if success:
-            self._metrics["success"] += 1
-        else:
-            self._metrics["failures"] += 1
-    
+            self.performance_metrics["successful_analyses"] += 1
+            
+            # Update average execution time
+            current_avg = self.performance_metrics["average_execution_time"]
+            total_successful = self.performance_metrics["successful_analyses"]
+            
+            new_avg = ((current_avg * (total_successful - 1)) + execution_time) / total_successful
+            self.performance_metrics["average_execution_time"] = round(new_avg, 2)
     
     async def get_agent_status(self) -> Dict[str, Any]:
-        """Return basic status info for each agent (non-blocking)."""
-        status = {}
-        for name, agent in self.agents.items():
+        """Get status of all agents"""
+        agent_statuses = {}
+        
+        for agent_id, agent in self.agents.items():
             try:
-                # prefer sync attribute or method 'status' / 'get_status'
-                if hasattr(agent, "get_status"):
-                    maybe = agent.get_status()
-                    if asyncio.iscoroutine(maybe):
-                        maybe = await maybe
-                    status[name] = maybe
-                elif hasattr(agent, "status"):
-                    status[name] = getattr(agent, "status")
-                else:
-                    status[name] = {"status": "unknown"}
+                status = agent.get_status()
+                health = await agent.health_check()
+                
+                agent_statuses[agent_id] = {
+                    **status,
+                    "health_status": "healthy" if health else "unhealthy"
+                }
             except Exception as e:
-                status[name] = {"status": "error", "error": str(e)}
-        return status
-    
+                agent_statuses[agent_id] = {
+                    "status": "error",
+                    "error": str(e),
+                    "health_status": "unhealthy"
+                }
+        
+        return {
+            "session_id": self.session_id,
+            "agents": agent_statuses,
+            "performance_metrics": self.performance_metrics,
+            "timestamp": datetime.now().isoformat()
+        }
     
     async def export_results(
         self, 
@@ -290,51 +365,69 @@ class TrendRadarOrchestrator:
         export_format: str = "json",
         filename: Optional[str] = None
     ) -> str:
-        """Export integrated results to disk. Returns path to written file."""
-        filename = filename or f"trend_report_{int(datetime.utcnow().timestamp())}"
-        if export_format == "json":
+        """
+        Export analysis results in various formats
+        
+        Args:
+            results: Analysis results to export
+            export_format: Format to export (json, csv, html)
+            filename: Optional filename, will generate if not provided
+            
+        Returns:
+            Filepath of exported file
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if not filename:
+            session_short = self.session_id[:8]
+            filename = f"trend_radar_results_{session_short}_{timestamp}"
+        
+        if export_format.lower() == "json":
             filepath = f"{filename}.json"
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
-            return filepath
-        elif export_format == "csv":
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(results, f, indent=2, default=str, ensure_ascii=False)
+        
+        elif export_format.lower() == "csv":
             filepath = f"{filename}.csv"
             await self._export_to_csv(results, filepath)
-            return filepath
-        elif export_format == "html":
+        
+        elif export_format.lower() == "html":
             filepath = f"{filename}.html"
             await self._export_to_html(results, filepath)
-            return filepath
+        
         else:
             raise ValueError(f"Unsupported export format: {export_format}")
-    
+        
+        logger.info(f"Results exported to {filepath}")
+        return filepath
     
     async def _export_to_csv(self, results: Dict[str, Any], filepath: str) -> None:
-        """Simple CSV export for top-level items (best-effort)."""
-        import csv
-        # flatten some data for CSV output (best-effort)
-        rows = []
-        trends = results.get("visualization", {}).get("radar_data", []) or []
-        if trends:
-            keys = set().union(*(t.keys() for t in trends))
-            with open(filepath, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=list(keys))
-                writer.writeheader()
-                writer.writerows(trends)
-        else:
-            # fallback: write metadata
-            with open(filepath, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["key", "value"])
-                for k, v in results.get("metadata", {}).items():
-                    writer.writerow([k, json.dumps(v)])
-    
+        """Export radar data to CSV format"""
+        radar_data = results.get("trend_radar", {}).get("data", [])
+        
+        if not radar_data:
+            logger.warning("No radar data to export to CSV")
+            return
+        
+        # Use visualization agent to convert to CSV
+        csv_data = self.agents["visualization_agent"]._convert_to_csv_format(radar_data)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(csv_data)
     
     async def _export_to_html(self, results: Dict[str, Any], filepath: str) -> None:
-        html = self._generate_html_report(results.get("report", {}), results.get("visualization", {}).get("radar_data", []), results.get("visualization", {}).get("statistics", {}))
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(html)
-    
+        """Export results to HTML report format"""
+        
+        # Extract key data
+        report = results.get("report", {})
+        radar_data = results.get("trend_radar", {}).get("data", [])
+        statistics = results.get("trend_radar", {}).get("statistics", {})
+        
+        # Generate HTML content
+        html_content = self._generate_html_report(report, radar_data, statistics)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content)
     
     def _generate_html_report(
         self, 
@@ -342,45 +435,162 @@ class TrendRadarOrchestrator:
         radar_data: List[Dict[str, Any]], 
         statistics: Dict[str, Any]
     ) -> str:
-        """Minimal HTML generation (safe, simple)."""
-        return f"""<html><head><meta charset="utf-8"><title>Trend Report</title></head>
+        """Generate HTML report content"""
+        
+        # Basic HTML template
+        html_template = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Trend Radar Analysis Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
+                .header {{ background: #f4f4f4; padding: 20px; border-radius: 5px; }}
+                .section {{ margin: 20px 0; padding: 15px; border-left: 4px solid #007acc; }}
+                .trend {{ background: #f9f9f9; margin: 10px 0; padding: 10px; border-radius: 3px; }}
+                .metric {{ display: inline-block; margin: 10px; padding: 10px; background: #e7f3ff; border-radius: 3px; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
         <body>
-        <h1>{report.get('metadata', {}).get('title', 'Trend Radar Report')}</h1>
-        <h2>Executive Summary</h2><pre>{report.get('executive_summary', '')}</pre>
-        <h2>Key Insights</h2><pre>{json.dumps(report.get('key_insights', []), indent=2)}</pre>
-        <h2>Recommendations</h2><pre>{json.dumps(report.get('strategic_recommendations', []), indent=2)}</pre>
-        <h2>Trends</h2><pre>{json.dumps(radar_data[:50], indent=2)}</pre>
-        </body></html>"""
-    
+            <div class="header">
+                <h1>Trend Radar Analysis Report</h1>
+                <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p>Session: {self.session_id[:8]}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Executive Summary</h2>
+                <p>{report.get('executive_summary', 'No executive summary available')}</p>
+            </div>
+            
+            <div class="section">
+                <h2>Key Metrics</h2>
+                <div class="metric">Total Trends: {len(radar_data)}</div>
+                <div class="metric">Avg Confidence: {statistics.get('overview', {}).get('average_confidence', 'N/A')}</div>
+                <div class="metric">Avg Impact: {statistics.get('overview', {}).get('average_impact', 'N/A')}</div>
+            </div>
+            
+            <div class="section">
+                <h2>Key Insights</h2>
+                {self._format_insights_html(report.get('key_insights', []))}
+            </div>
+            
+            <div class="section">
+                <h2>Strategic Recommendations</h2>
+                {self._format_recommendations_html(report.get('strategic_recommendations', []))}
+            </div>
+            
+            <div class="section">
+                <h2>Trend Details</h2>
+                {self._format_trends_html(radar_data)}
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_template
     
     def _format_insights_html(self, insights: List[Dict[str, Any]]) -> str:
-        return "\n".join(f"<li>{json.dumps(i)}</li>" for i in insights)
-    
+        """Format insights for HTML display"""
+        if not insights:
+            return "<p>No insights available</p>"
+        
+        html_parts = []
+        for insight in insights[:5]:  # Top 5 insights
+            html_parts.append(f"""
+            <div class="trend">
+                <h4>{insight.get('title', 'Unknown Insight')}</h4>
+                <p>{insight.get('description', 'No description available')}</p>
+                <small>Type: {insight.get('type', 'unknown')} | Importance: {insight.get('importance', 'N/A')}</small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
     
     def _format_recommendations_html(self, recommendations: List[Dict[str, Any]]) -> str:
-        return "\n".join(f"<li>{json.dumps(r)}</li>" for r in recommendations)
-    
+        """Format recommendations for HTML display"""
+        if not recommendations:
+            return "<p>No recommendations available</p>"
+        
+        html_parts = []
+        for rec in recommendations[:5]:  # Top 5 recommendations
+            html_parts.append(f"""
+            <div class="trend">
+                <h4>{rec.get('title', 'Unknown Recommendation')}</h4>
+                <p>{rec.get('description', 'No description available')}</p>
+                <small>Priority: {rec.get('priority', 'medium')} | Timeframe: {rec.get('timeframe', 'N/A')} | Effort: {rec.get('effort', 'N/A')}</small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
     
     def _format_trends_html(self, radar_data: List[Dict[str, Any]]) -> str:
-        return "\n".join(f"<li>{json.dumps(t)}</li>" for t in radar_data)
-    
+        """Format trend data as HTML table"""
+        if not radar_data:
+            return "<p>No trend data available</p>"
+        
+        table_rows = []
+        for trend in radar_data[:10]:  # Top 10 trends
+            table_rows.append(f"""
+            <tr>
+                <td>{trend.get('title', 'Unknown')}</td>
+                <td>{trend.get('category', 'N/A')}</td>
+                <td>{trend.get('y', 'N/A')}</td>
+                <td>{trend.get('confidence', 'N/A')}</td>
+                <td>{trend.get('time_horizon_label', 'N/A')}</td>
+            </tr>
+            """)
+        
+        return f"""
+        <table>
+            <thead>
+                <tr>
+                    <th>Trend</th>
+                    <th>Category</th>
+                    <th>Impact</th>
+                    <th>Confidence</th>
+                    <th>Time Horizon</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join(table_rows)}
+            </tbody>
+        </table>
+        """
     
     async def cleanup_session(self) -> None:
-        """Clear active sessions and message queue."""
-        self.active_sessions.clear()
+        """Cleanup session resources"""
+        logger.info(f"Cleaning up session {self.session_id}")
+        
+        # Clear message queue
         while not self.message_queue.empty():
             try:
-                _ = self.message_queue.get_nowait()
+                await self.message_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-    
+        
+        # Reset agent states if needed
+        for agent in self.agents.values():
+            if hasattr(agent, 'cleanup'):
+                await agent.cleanup()
+        
+        logger.info("Session cleanup completed")
     
     def get_performance_summary(self) -> Dict[str, Any]:
-        runs = self._metrics["runs"]
-        avg_time = (self._metrics["total_time"] / runs) if runs else 0.0
+        """Get performance summary of the orchestrator"""
         return {
-            "runs": runs,
-            "success": self._metrics["success"],
-            "failures": self._metrics["failures"],
-            "average_time_sec": avg_time
+            "session_id": self.session_id,
+            "performance_metrics": self.performance_metrics.copy(),
+            "success_rate": (
+                self.performance_metrics["successful_analyses"] / 
+                max(1, self.performance_metrics["total_analyses"])
+            ),
+            "agent_count": len(self.agents),
+            "session_created": datetime.now().isoformat()  # This would be tracked in real implementation
         }
+    

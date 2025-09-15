@@ -16,7 +16,8 @@ class LLMClient:
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "gpt-oss:20b",
+        # model: str = "gpt-oss:20b",
+        model: str = "qwen3:4b",
         timeout: int = 60
     ):
         self.base_url = base_url

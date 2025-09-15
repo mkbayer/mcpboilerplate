@@ -341,22 +341,44 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🐛 Troubleshooting
 
+### Quick Test
+```bash
+# Test that everything works (Linux/Mac)
+./run.sh health-check
+
+# Test that everything works (Windows)
+run.bat health-check
+
+# Or use Python script
+python3 run_trend_analysis.py health-check
+```
+
 ### Common Issues
 
 1. **"Module not found" errors**:
    ```bash
-   # Try running from project root directory
+   # Make sure you're in the project root directory
    cd trend-radar-mcp
-   python -m trend_radar.main analyze "your query"
+   ls -la  # You should see run.sh and src/ directory
    
-   # Or use the quick start script
-   ./run_trend_analysis.py analyze "your query"
+   # Use the shell script which handles paths automatically
+   ./run.sh health-check
    
-   # Or install dependencies
-   uv sync
+   # Or install missing dependencies
+   pip install httpx typer[all] rich
    ```
 
-2. **"Connection refused" errors**:
+2. **"Permission denied" errors**:
+   ```bash
+   # Make scripts executable (Linux/Mac only)
+   chmod +x run.sh
+   chmod +x run_trend_analysis.py
+   
+   # Or run with python directly
+   python3 run_trend_analysis.py health-check
+   ```
+
+3. **"Connection refused" errors**:
    ```bash
    # Ensure Ollama is running
    ollama serve
@@ -366,88 +388,97 @@ This project is licensed under the MIT License - see the LICENSE file for detail
    
    # Pull the model if missing
    ollama pull gpt-oss:20b
+   
+   # Test connection
+   curl http://localhost:11434/api/tags
    ```
 
-3. **"Model not found" errors**:
+4. **Python/Python3 command not found**:
    ```bash
-   # Pull the model
-   ollama pull gpt-oss:20b
-   
-   # Verify model name in configuration
-   python -m trend_radar.main analyze "test" --model gpt-oss:20b
-   ```
-
-4. **"Command not found: trend-radar"**:
-   ```bash
-   # Install the package first
-   uv pip install -e .
-   
-   # Or use direct execution methods
-   python -m trend_radar.main analyze "your query"
-   
-   # Or use the quick start script
-   ./run_trend_analysis.py analyze "your query"
-   ```
-
-5. **Permission errors with run script**:
-   ```bash
-   # Make the script executable
-   chmod +x run_trend_analysis.py
-   
-   # Or run with python directly
-   python run_trend_analysis.py analyze "your query"
-   ```
-
-6. **Slow performance**:
-   ```bash
-   # Reduce analysis depth to "light"
-   python -m trend_radar.main analyze "query" --depth light
-   
-   # Check system resources (RAM, CPU)
-   # Ensure adequate GPU/CPU for model
-   ```
-
-7. **Import errors**:
-   ```bash
-   # Reinstall dependencies
-   uv sync --reinstall
-   
-   # Check Python version compatibility (>=3.8)
+   # Check Python installation
+   python3 --version
    python --version
    
-   # Try running from correct directory
-   cd trend-radar-mcp
+   # On some systems, use python instead of python3
+   python run_trend_analysis.py health-check
    ```
 
-### Debug Mode
+5. **Import errors after installation**:
+   ```bash
+   # Verify dependencies are installed
+   python3 -c "import httpx, typer, rich; print('✅ All packages available')"
+   
+   # Reinstall if needed
+   pip install --force-reinstall httpx typer[all] rich
+   ```
 
-Enable verbose logging:
+6. **Windows-specific issues**:
+   ```cmd
+   REM Use the Windows batch file
+   run.bat health-check
+   
+   REM Or run Python script directly
+   python run_trend_analysis.py health-check
+   
+   REM Check Python version
+   python --version
+   ```
+
+### Manual Dependency Check
 ```bash
-# Set environment variable for debug logging
-export PYTHONPATH=src
-python -c "
-from trend_radar.utils.logger import configure_root_logger
-configure_root_logger('DEBUG', use_rich=True)
-import asyncio
-from trend_radar.main import run_trend_analysis
-asyncio.run(run_trend_analysis('debug test', {'base_url': 'http://localhost:11434', 'model': 'gpt-oss:20b'}, {'depth': 'light'}))
+# Check if all required packages are available
+python3 -c "
+import sys
+packages = ['httpx', 'typer', 'rich']
+missing = []
+for pkg in packages:
+    try:
+        __import__(pkg)
+        print(f'✅ {pkg}')
+    except ImportError:
+        missing.append(pkg)
+        print(f'❌ {pkg}')
+
+if missing:
+    print(f'Install missing: pip install {\" \".join(missing)}')
+else:
+    print('🎉 All dependencies available!')
 "
 ```
 
-### Test the Installation
-
+### Debug Mode
 ```bash
-# Quick test to verify everything works
-./run_trend_analysis.py health-check
+# Run with verbose output
+./run.sh analyze "test query" --help
 
-# Or
-python -m trend_radar.main health-check
+# Check if Ollama is accessible
+curl -X POST http://localhost:11434/api/generate -d '{
+  "model": "gpt-oss:20b",
+  "prompt": "Hello",
+  "stream": false
+}'
+```
 
-# Run the demo to test full functionality
-./run_trend_analysis.py demo
+### Step-by-step Setup Verification
+```bash
+# 1. Check project structure
+ls -la
+# Should show: run.sh, run_trend_analysis.py, src/, etc.
 
-# Or
-python -m trend_radar.main demo
+# 2. Check Python
+python3 --version
+
+# 3. Install dependencies
+pip install httpx typer[all] rich
+
+# 4. Test dependencies
+python3 -c "import httpx, typer, rich; print('OK')"
+
+# 5. Check Ollama
+ollama list | grep gpt-oss
+
+# 6. Test the application
+./run.sh health-check
 ```
 
 ## 📞 Support

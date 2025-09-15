@@ -338,3 +338,4 @@ class DataCollectorAgent(MCPAgent):
     def _calculate_freshness(self, trends: List[Dict[str, Any]]) -> float:
         """Calculate data freshness score (all data is fresh since just collected)"""
         return 1.0  # Perfect freshness for newly collected data
+    

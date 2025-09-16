@@ -5,10 +5,22 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
 ## 🌟 Features
 
 ### 🤖 Four Specialized MCP Agents
-- **DataCollectorAgent**: Gathers trend data from multiple sources
-- **AnalysisAgent**: Analyzes trends for impact, confidence, and timeline
+- **DataCollectorAgent**: **Collects real trend data from live web sources** including:
+  - RSS feeds from TechCrunch, Wired, Ars Technica, The Verge
+  - Hacker News API for trending tech discussions
+  - DuckDuckGo search results for recent articles
+  - Real-time web scraping with intelligent content extraction
+- **AnalysisAgent**: Analyzes trends for impact, confidence, and timeline using both web data and LLM insights
 - **VisualizationAgent**: Creates trend radar charts and supporting visualizations  
 - **ReportingAgent**: Generates comprehensive reports with insights and recommendations
+
+### 🌐 Real Data Collection Capabilities
+- **Live Web Scraping**: Collects data from multiple real sources in real-time
+- **RSS Feed Integration**: Automatically pulls from 10+ technology and business news feeds  
+- **Search Engine Integration**: Uses DuckDuckGo API for recent article discovery
+- **Content Analysis**: Extracts and analyzes trending topics from Hacker News discussions
+- **Multi-source Correlation**: Identifies trends by correlating signals across multiple sources
+- **Fallback Intelligence**: Uses LLM generation when web sources are unavailable
 
 ### 🎯 Trend Radar Capabilities
 - **Impact Assessment**: Low to Critical impact scoring
@@ -45,6 +57,8 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
 
 ### Installation
 
+#### Option 1: Using uv (Recommended)
+
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
@@ -56,32 +70,98 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
    uv sync
    ```
 
-3. **Install in development mode**:
+3. **Verify installation**:
    ```bash
-   uv pip install -e .
+   uv run python -c "import rich; import typer; import httpx; print('✅ Dependencies installed successfully')"
    ```
+
+#### Option 2: Using pip with requirements.txt
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd trend-radar-mcp
+   ```
+
+2. **Create virtual environment and install**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+3. **Verify installation**:
+   ```bash
+   python -c "import rich; import typer; import httpx; print('✅ Dependencies installed successfully')"
+   ```
+
+#### Option 3: Direct execution (No installation)
+
+```bash
+# Install required packages for real web data collection
+pip install httpx typer[all] rich beautifulsoup4 feedparser python-dotenv python-dateutil
+
+# Run directly using the quick start script
+python run_trend_analysis.py health-check
+
+# Test with real web data collection
+python run_trend_analysis.py analyze "artificial intelligence trends" --depth standard
+```
 
 ### Basic Usage
 
-1. **Run a quick analysis**:
-   ```bash
-   trend-radar analyze "artificial intelligence trends 2025"
-   ```
+#### Method 1: Shell Scripts (Easiest - Works on any system)
 
-2. **Interactive mode**:
-   ```bash
-   trend-radar interactive
-   ```
+**Linux/Mac:**
+```bash
+# Make script executable (only needed once)
+chmod +x run.sh
 
-3. **Health check**:
-   ```bash
-   trend-radar health-check
-   ```
+# Run commands
+./run.sh analyze "artificial intelligence trends 2025"
+./run.sh interactive
+./run.sh health-check
+./run.sh demo
+```
 
-4. **Demo mode**:
-   ```bash
-   trend-radar demo
-   ```
+**Windows:**
+```cmd
+REM Run commands
+run.bat analyze "artificial intelligence trends 2025"
+run.bat interactive
+run.bat health-check
+run.bat demo
+```
+
+#### Method 2: Python Script (Cross-platform)
+```bash
+# Run the Python script directly
+python3 run_trend_analysis.py analyze "AI trends 2025"
+python3 run_trend_analysis.py interactive
+python3 run_trend_analysis.py health-check
+python3 run_trend_analysis.py demo
+
+# On Windows, use python instead of python3
+python run_trend_analysis.py analyze "AI trends 2025"
+```
+
+#### Method 3: Direct Module Execution (After setting PYTHONPATH)
+```bash
+# Linux/Mac
+export PYTHONPATH="$(pwd)/src:$PYTHONPATH"
+python3 -m trend_radar.main analyze "AI trends 2025"
+
+# Windows
+set PYTHONPATH=%cd%\src;%PYTHONPATH%
+python -m trend_radar.main analyze "AI trends 2025"
+```
+
+#### Method 4: Using uv (If you have uv installed)
+```bash
+# From project root
+uv run python -m trend_radar.main analyze "AI trends 2025"
+uv run python -m trend_radar.main interactive
+```
 
 ## 📖 Detailed Usage
 
@@ -89,16 +169,30 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
 
 ```bash
 # Basic analysis with default settings
-trend-radar analyze "sustainable technology innovations"
+./run.sh analyze "sustainable technology innovations"
 
-# Deep analysis with HTML output
-trend-radar analyze "future of remote work" --depth deep --output-format html
+# Deep analysis with HTML output  
+./run.sh analyze "future of remote work" --depth deep --output-format html
 
 # Executive report for leadership
-trend-radar analyze "blockchain applications" --report-type executive --depth light
+./run.sh analyze "blockchain applications" --report-type executive --depth light
 
 # Custom LLM configuration
-trend-radar analyze "quantum computing trends" --llm-url http://localhost:11434 --model gpt-oss:20b
+./run.sh analyze "quantum computing trends" --llm-url http://localhost:11434 --model gpt-oss:20b
+
+# Non-interactive mode (no progress bars)
+./run.sh analyze "AI trends" --no-interactive
+
+# Specify output file
+./run.sh analyze "green tech" --output-file my_analysis --output-format json
+
+# Get help for any command
+./run.sh analyze --help
+./run.sh --help
+
+# Windows examples
+run.bat analyze "sustainable technology innovations"
+run.bat analyze "future of remote work" --depth deep --output-format html
 ```
 
 ### Analysis Configuration Options

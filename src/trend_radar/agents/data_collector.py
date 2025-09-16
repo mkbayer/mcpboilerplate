@@ -1,3 +1,5 @@
+
+
 """
 Data Collector Agent - Responsible for gathering trend data from various sources.
 """

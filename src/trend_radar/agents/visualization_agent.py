@@ -1,3 +1,4 @@
+
 """
 Visualization Agent - Responsible for creating trend radar visualizations and data representations.
 """
@@ -527,8 +528,8 @@ class VisualizationAgent(MCPAgent):
         category_counts = {cat: categories.count(cat) for cat in unique_categories}
         total = len(categories)
         
-        shannon_index = -sum((count/total) * (count/total).bit_length() for count in category_counts.values())
-        max_shannon = (len(unique_categories)).bit_length()  # Max possible diversity
+        shannon_index = -sum((count/total) * (count/total) for count in category_counts.values())
+        max_shannon = (len(unique_categories))  # Max possible diversity
         
         return round(shannon_index / max_shannon, 2) if max_shannon > 0 else 0.0
     
@@ -744,4 +745,3 @@ class VisualizationAgent(MCPAgent):
             })
         
         return svg_quadrants
-    

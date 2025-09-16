@@ -5,7 +5,7 @@ LLM client for interfacing with local Ollama gpt-oss:20b model.
 import asyncio
 import httpx
 from typing import Dict, Optional, Any
-from ..utils.logger import get_logger
+from trend_radar.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

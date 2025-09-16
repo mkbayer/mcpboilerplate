@@ -198,6 +198,11 @@ async def run_trend_analysis(
                 if results.get("processing_complete"):
                     display_results_summary(results)
                     
+                    # Show plot files if they were created
+                    plot_info = show_plot_files(results)
+                    if plot_info:
+                        console.print(plot_info)
+                    
                     # Export results
                     if output_format and output_format != "none":
                         export_path = await orchestrator.export_results(
@@ -238,7 +243,92 @@ async def run_trend_analysis(
             await orchestrator.cleanup_session()
 
 
+def show_plot_files(results: Dict[str, Any]) -> Optional[str]:
+    """Show information about generated plot files"""
+    from pathlib import Path
+    
+    # Check if visualization results exist
+    visualization = results.get("trend_radar", {})
+    plot_files = visualization.get("plot_files", {})
+    supporting_plot_files = visualization.get("supporting_plot_files", {})
+    
+    if not plot_files and not supporting_plot_files:
+        return None
+    
+    plot_info = "\n📊 [bold blue]Generated Visualizations:[/bold blue]\n"
+    
+    # Show main plots
+    if plot_files:
+        for plot_type, plot_path in plot_files.items():
+            if plot_path and Path(plot_path).exists():
+                file_size = Path(plot_path).stat().st_size / 1024  # KB
+                plot_info += f"  📈 {plot_type}: [green]{plot_path}[/green] ({file_size:.1f} KB)\n"
+            elif plot_path:
+                plot_info += f"  ❌ {plot_type}: [red]{plot_path}[/red] (file not found)\n"
+    
+    # Show supporting plots
+    if supporting_plot_files:
+        for plot_type, plot_path in supporting_plot_files.items():
+            if plot_path and Path(plot_path).exists():
+                file_size = Path(plot_path).stat().st_size / 1024  # KB
+                plot_info += f"  📊 {plot_type}: [green]{plot_path}[/green] ({file_size:.1f} KB)\n"
+            elif plot_path:
+                plot_info += f"  ❌ {plot_type}: [red]{plot_path}[/red] (file not found)\n"
+    
+    # Show directory info
+    plots_dir = Path("plots")
+    if plots_dir.exists():
+        plot_count = len(list(plots_dir.glob("*.png"))) + len(list(plots_dir.glob("*.html")))
+        plot_info += f"\n📁 [yellow]Plot directory:[/yellow] [cyan]{plots_dir.absolute()}[/cyan] ({plot_count} files)\n"
+        
+        # Show recent files
+        recent_files = sorted(plots_dir.glob("*"), key=lambda x: x.stat().st_mtime, reverse=True)
+        if recent_files:
+            plot_info += "  Recent files:\n"
+            for file in recent_files[:5]:  # Show last 5 files
+                plot_info += f"    • {file.name}\n"
+    else:
+        plot_info += f"\n📁 [red]Plot directory not found:[/red] {plots_dir.absolute()}\n"
+    
+    return plot_info
+
+
 def display_results_summary(results: Dict[str, Any]) -> None:
+    """Display a summary of analysis results"""
+    
+    # Extract key metrics
+    pipeline_summary = results.get("pipeline_summary", {})
+    radar_stats = results.get("trend_radar", {}).get("statistics", {}).get("overview", {})
+    insights = results.get("report", {}).get("key_insights", [])
+    recommendations = results.get("report", {}).get("strategic_recommendations", [])
+    
+    # Create summary table
+    table = Table(title="📊 Analysis Summary", show_header=True, header_style="bold blue")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    
+    table.add_row("Trends Processed", str(pipeline_summary.get("total_trends_processed", 0)))
+    table.add_row("Average Confidence", f"{radar_stats.get('average_confidence', 0):.1%}")
+    table.add_row("Average Impact", f"{radar_stats.get('average_impact', 0):.1f}/4")
+    table.add_row("Key Insights", str(len(insights)))
+    table.add_row("Recommendations", str(len(recommendations)))
+    
+    console.print(table)
+    
+    # Display top insights
+    if insights:
+        console.print("\n💡 [bold yellow]Top Insights:[/bold yellow]")
+        for i, insight in enumerate(insights[:3], 1):
+            console.print(f"  {i}. [bold]{insight.get('title', 'Unknown')}[/bold]")
+            console.print(f"     {insight.get('description', 'No description')[:100]}...")
+    
+    # Display top recommendations  
+    if recommendations:
+        console.print("\n🎯 [bold green]Key Recommendations:[/bold green]")
+        for i, rec in enumerate(recommendations[:3], 1):
+            priority_color = {"high": "red", "medium": "yellow", "low": "blue"}.get(rec.get('priority', 'medium'), "white")
+            console.print(f"  {i}. [{priority_color}]{rec.get('priority', 'medium').upper()}[/{priority_color}] [bold]{rec.get('title', 'Unknown')}[/bold]")
+            console.print(f"     {rec.get('description', 'No description')[:100]}...")
     """Display a summary of analysis results"""
     
     # Extract key metrics

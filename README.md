@@ -22,12 +22,77 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
 - **Multi-source Correlation**: Identifies trends by correlating signals across multiple sources
 - **Fallback Intelligence**: Uses LLM generation when web sources are unavailable
 
-### 🎯 Trend Radar Capabilities
-- **Impact Assessment**: Low to Critical impact scoring
-- **Confidence Analysis**: Data quality and reliability scoring
-- **Timeline Prediction**: Emerging to Long-term horizon mapping
-- **Strategic Quadrants**: Quick Wins, Strategic Bets, Tactical Moves, Background Noise
-- **Risk/Opportunity Matrix**: Comprehensive risk and opportunity identification
+### 📊 Viewing Generated Plots
+
+After running an analysis, you can view the generated visualizations:
+
+#### **Command Line:**
+```bash
+# List all generated plots
+./run.sh list-plots
+
+# Open the plots directory in your file manager  
+./run.sh open-plots
+
+# Or manually check the plots directory
+ls -la plots/
+```
+
+#### **Expected Output Files:**
+```bash
+plots/
+├── trend_radar_20241216_143022.png          # Main radar scatter plot
+├── trend_radar_20241216_143022_interactive.html  # Interactive HTML version
+├── category_distribution_20241216_143022.png     # Category pie chart
+├── confidence_vs_impact_20241216_143022.png      # Scatter analysis
+├── timeline_distribution_20241216_143022.png     # Timeline bars
+└── trend_dashboard_20241216_143022.png          # 4-panel summary
+```
+
+#### **Testing Plot Generation:**
+```bash
+# Test if plotting works on your system
+python3 test_plots.py
+
+# This will verify:
+# ✅ Matplotlib is working
+# ✅ TrendRadarPlotter can create files  
+# ✅ Plots directory is accessible
+```
+
+#### **Troubleshooting "No Plots" Issue:**
+
+1. **Check if dependencies are installed:**
+   ```bash
+   python3 -c "import matplotlib, seaborn, plotly, pandas; print('✅ All plotting libraries available')"
+   ```
+
+2. **Verify plot directory exists:**
+   ```bash
+   ls -la plots/
+   # Should show timestamped .png and .html files
+   ```
+
+3. **Check matplotlib backend:**
+   ```bash
+   python3 -c "
+   import matplotlib
+   print('Backend:', matplotlib.get_backend())
+   # Should show 'Agg' or similar non-interactive backend
+   "
+   ```
+
+4. **Run analysis with verbose output:**
+   ```bash
+   ./run.sh analyze "test trends" --depth light
+   # Watch for "Generated visualization" messages
+   ```
+
+5. **Manual plot directory check:**
+   ```bash
+   # Check absolute path
+   python3 -c "from pathlib import Path; print('Plots dir:', Path('plots').absolute())"
+   ```
 
 ### 📊 Output Formats
 - **JSON**: Structured data for integration
@@ -98,13 +163,13 @@ A sophisticated **Model Context Protocol (MCP)** demonstration showcasing AI-pow
 #### Option 3: Direct execution (No installation)
 
 ```bash
-# Install required packages for real web data collection
-pip install httpx typer[all] rich beautifulsoup4 feedparser python-dotenv python-dateutil
+# Install required packages for real web data collection and plotting
+pip install httpx typer[all] rich beautifulsoup4 feedparser python-dotenv python-dateutil matplotlib seaborn plotly pandas
 
 # Run directly using the quick start script
 python run_trend_analysis.py health-check
 
-# Test with real web data collection
+# Test with real web data collection and plot generation
 python run_trend_analysis.py analyze "artificial intelligence trends" --depth standard
 ```
 

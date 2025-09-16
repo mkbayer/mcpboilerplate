@@ -118,9 +118,11 @@ class TrendRadarOrchestrator:
         
         try:
             # Check agent health before starting
+            logger.info("Checking agent health...")
             await self._verify_agent_health()
             
             # Execute analysis pipeline
+            logger.info("Executing analysis pipeline...")
             results = await self._execute_analysis_pipeline(query, config, correlation_id)
             
             # Calculate execution metrics
@@ -142,14 +144,20 @@ class TrendRadarOrchestrator:
             
         except Exception as e:
             logger.error(f"Analysis orchestration failed: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
             self._update_performance_metrics(0, False)
             
             return {
                 "error": str(e),
+                "error_type": type(e).__name__,
                 "processing_complete": False,
                 "session_id": self.session_id,
                 "correlation_id": correlation_id,
-                "failed_at": datetime.now().isoformat()
+                "failed_at": datetime.now().isoformat(),
+                "traceback": traceback.format_exc()
             }
     
     async def _verify_agent_health(self) -> None:
@@ -416,28 +424,42 @@ class TrendRadarOrchestrator:
             f.write(csv_data)
     
     async def _export_to_html(self, results: Dict[str, Any], filepath: str) -> None:
-        """Export results to HTML report format"""
+        """Export results to HTML report format with embedded plots"""
         
         # Extract key data
         report = results.get("report", {})
         radar_data = results.get("trend_radar", {}).get("data", [])
         statistics = results.get("trend_radar", {}).get("statistics", {})
+        plot_files = results.get("trend_radar", {}).get("plot_files", {})
+        supporting_plot_files = results.get("trend_radar", {}).get("supporting_plot_files", {})
         
-        # Generate HTML content
-        html_content = self._generate_html_report(report, radar_data, statistics)
+        # Generate HTML content with embedded plots
+        html_content = self._generate_html_report_with_plots(
+            report, radar_data, statistics, plot_files, supporting_plot_files
+        )
         
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_content)
     
-    def _generate_html_report(
+    def _generate_html_report_with_plots(
         self, 
         report: Dict[str, Any], 
         radar_data: List[Dict[str, Any]], 
-        statistics: Dict[str, Any]
+        statistics: Dict[str, Any],
+        plot_files: Dict[str, str],
+        supporting_plot_files: Dict[str, str]
     ) -> str:
-        """Generate HTML report content"""
+        """Generate HTML report content with embedded plot images"""
         
-        # Basic HTML template
+        # Convert plot files to base64 for embedding
+        embedded_plots = self._embed_plot_images(plot_files, supporting_plot_files)
+        
+        # Get analysis metadata
+        pipeline_summary = report.get("pipeline_summary", {})
+        insights = report.get("key_insights", [])
+        recommendations = report.get("strategic_recommendations", [])
+        
+        # Enhanced HTML template with embedded plots
         html_template = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -446,54 +468,349 @@ class TrendRadarOrchestrator:
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Trend Radar Analysis Report</title>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
-                .header {{ background: #f4f4f4; padding: 20px; border-radius: 5px; }}
-                .section {{ margin: 20px 0; padding: 15px; border-left: 4px solid #007acc; }}
-                .trend {{ background: #f9f9f9; margin: 10px 0; padding: 10px; border-radius: 3px; }}
-                .metric {{ display: inline-block; margin: 10px; padding: 10px; background: #e7f3ff; border-radius: 3px; }}
-                table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
-                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                th {{ background-color: #f2f2f2; }}
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 0; padding: 20px; line-height: 1.6; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }}
+                .container {{
+                    max-width: 1200px; margin: 0 auto; 
+                    background: white; border-radius: 15px; 
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                    color: white; padding: 40px; text-align: center;
+                }}
+                .header h1 {{ margin: 0; font-size: 2.5em; font-weight: 300; }}
+                .header p {{ margin: 10px 0 0 0; opacity: 0.9; font-size: 1.1em; }}
+                .content {{ padding: 30px; }}
+                .section {{ 
+                    margin: 30px 0; padding: 25px; 
+                    border-radius: 10px; 
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+                }}
+                .executive-summary {{ background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }}
+                .metrics-section {{ background: #f8f9ff; }}
+                .insights-section {{ background: #fff5f5; }}
+                .recommendations-section {{ background: #f0fff4; }}
+                .plots-section {{ background: #fafafa; }}
+                .trend-details-section {{ background: #f9f9f9; }}
+                
+                h2 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+                .executive-summary h2 {{ color: white; border-bottom: 3px solid rgba(255,255,255,0.3); }}
+                
+                .metric {{ 
+                    display: inline-block; margin: 15px; padding: 20px; 
+                    background: white; border-radius: 10px; 
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                    min-width: 120px; text-align: center;
+                }}
+                .metric-value {{ font-size: 2em; font-weight: bold; color: #3498db; }}
+                .metric-label {{ color: #7f8c8d; font-size: 0.9em; }}
+                
+                .trend {{ 
+                    background: white; margin: 15px 0; padding: 20px; 
+                    border-radius: 10px; border-left: 4px solid #3498db;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                }}
+                .trend h4 {{ margin: 0 0 10px 0; color: #2c3e50; }}
+                .trend p {{ margin: 10px 0; color: #34495e; }}
+                .trend small {{ color: #7f8c8d; }}
+                
+                .insight {{ 
+                    background: white; margin: 15px 0; padding: 20px; 
+                    border-radius: 10px; border-left: 4px solid #e74c3c;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                }}
+                
+                .recommendation {{ 
+                    background: white; margin: 15px 0; padding: 20px; 
+                    border-radius: 10px; border-left: 4px solid #27ae60;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                }}
+                
+                .priority-high {{ border-left-color: #e74c3c !important; }}
+                .priority-medium {{ border-left-color: #f39c12 !important; }}
+                .priority-low {{ border-left-color: #3498db !important; }}
+                
+                .plot-container {{ 
+                    text-align: center; margin: 25px 0; 
+                    background: white; border-radius: 10px; 
+                    padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }}
+                .plot-container img {{ 
+                    max-width: 100%; height: auto; 
+                    border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }}
+                .plot-title {{ 
+                    font-size: 1.2em; font-weight: bold; 
+                    margin-bottom: 15px; color: #2c3e50;
+                }}
+                
+                .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+                @media (max-width: 768px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+                
+                .interactive-note {{
+                    background: #e8f4fd; border: 1px solid #3498db;
+                    border-radius: 10px; padding: 15px; margin: 15px 0;
+                    text-align: center; color: #2980b9;
+                }}
+                
+                .footer {{ 
+                    background: #34495e; color: white; 
+                    padding: 20px; text-align: center; 
+                    font-size: 0.9em; opacity: 0.8;
+                }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>Trend Radar Analysis Report</h1>
-                <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                <p>Session: {self.session_id[:8]}</p>
-            </div>
-            
-            <div class="section">
-                <h2>Executive Summary</h2>
-                <p>{report.get('executive_summary', 'No executive summary available')}</p>
-            </div>
-            
-            <div class="section">
-                <h2>Key Metrics</h2>
-                <div class="metric">Total Trends: {len(radar_data)}</div>
-                <div class="metric">Avg Confidence: {statistics.get('overview', {}).get('average_confidence', 'N/A')}</div>
-                <div class="metric">Avg Impact: {statistics.get('overview', {}).get('average_impact', 'N/A')}</div>
-            </div>
-            
-            <div class="section">
-                <h2>Key Insights</h2>
-                {self._format_insights_html(report.get('key_insights', []))}
-            </div>
-            
-            <div class="section">
-                <h2>Strategic Recommendations</h2>
-                {self._format_recommendations_html(report.get('strategic_recommendations', []))}
-            </div>
-            
-            <div class="section">
-                <h2>Trend Details</h2>
-                {self._format_trends_html(radar_data)}
+            <div class="container">
+                <div class="header">
+                    <h1>🎯 Trend Radar Analysis Report</h1>
+                    <p>Generated: {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}</p>
+                    <p>Session: {self.session_id[:8]}</p>
+                </div>
+                
+                <div class="content">
+                    <div class="section executive-summary">
+                        <h2>📋 Executive Summary</h2>
+                        <p>{report.get('executive_summary', 'No executive summary available')}</p>
+                    </div>
+                    
+                    <div class="section metrics-section">
+                        <h2>📊 Key Metrics</h2>
+                        <div class="metric">
+                            <div class="metric-value">{len(radar_data)}</div>
+                            <div class="metric-label">Total Trends</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">{statistics.get('overview', {}).get('average_confidence', 0):.0%}</div>
+                            <div class="metric-label">Avg Confidence</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">{statistics.get('overview', {}).get('average_impact', 0):.1f}/4</div>
+                            <div class="metric-label">Avg Impact</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">{len(insights)}</div>
+                            <div class="metric-label">Key Insights</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">{len(recommendations)}</div>
+                            <div class="metric-label">Recommendations</div>
+                        </div>
+                    </div>
+                    
+                    {self._generate_plots_section_html(embedded_plots)}
+                    
+                    <div class="section insights-section">
+                        <h2>💡 Key Insights</h2>
+                        {self._format_insights_html_enhanced(insights)}
+                    </div>
+                    
+                    <div class="section recommendations-section">
+                        <h2>🎯 Strategic Recommendations</h2>
+                        {self._format_recommendations_html_enhanced(recommendations)}
+                    </div>
+                    
+                    <div class="section trend-details-section">
+                        <h2>📈 Trend Details</h2>
+                        {self._format_trends_html_enhanced(radar_data[:10])}
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>Generated by Trend Radar MCP Application | AI-Powered Multi-Agent Analysis</p>
+                    <p>Plots are embedded for offline viewing | Interactive versions available separately</p>
+                </div>
             </div>
         </body>
         </html>
         """
         
         return html_template
+    
+    def _embed_plot_images(self, plot_files: Dict[str, str], supporting_plot_files: Dict[str, str]) -> Dict[str, str]:
+        """Convert plot image files to base64 for HTML embedding"""
+        import base64
+        
+        embedded_plots = {}
+        
+        # Combine all plot files
+        all_plots = {**plot_files, **supporting_plot_files}
+        
+        for plot_name, plot_path in all_plots.items():
+            if plot_path and Path(plot_path).exists() and plot_path.endswith('.png'):
+                try:
+                    with open(plot_path, 'rb') as f:
+                        image_data = base64.b64encode(f.read()).decode('utf-8')
+                        embedded_plots[plot_name] = f"data:image/png;base64,{image_data}"
+                    
+                    logger.debug(f"Embedded plot: {plot_name}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to embed plot {plot_name}: {e}")
+                    embedded_plots[plot_name] = None
+        
+        return embedded_plots
+    
+    def _generate_plots_section_html(self, embedded_plots: Dict[str, str]) -> str:
+        """Generate the plots section with embedded images"""
+        
+        if not embedded_plots:
+            return """
+            <div class="section plots-section">
+                <h2>📊 Visualizations</h2>
+                <p>No plots were generated for this analysis.</p>
+            </div>
+            """
+        
+        plots_html = """
+        <div class="section plots-section">
+            <h2>📊 Visualizations</h2>
+            <div class="interactive-note">
+                📱 <strong>Interactive versions:</strong> Look for *_interactive.html files in the plots directory for fully interactive charts!
+            </div>
+        """
+        
+        # Main radar plot
+        if 'main_radar' in embedded_plots and embedded_plots['main_radar']:
+            plots_html += f"""
+            <div class="plot-container">
+                <div class="plot-title">🎯 Main Trend Radar Chart</div>
+                <img src="{embedded_plots['main_radar']}" alt="Trend Radar Chart" />
+                <p style="margin-top: 15px; color: #7f8c8d; font-style: italic;">
+                    Interactive quadrant view showing trends positioned by impact level (Y-axis) and time horizon (X-axis). 
+                    Point size represents confidence level.
+                </p>
+            </div>
+            """
+        
+        # Supporting plots in a grid
+        supporting_plots = {k: v for k, v in embedded_plots.items() if k != 'main_radar' and v}
+        
+        if supporting_plots:
+            plots_html += """
+            <div class="grid">
+            """
+            
+            plot_titles = {
+                'category_distribution': '🥧 Category Distribution',
+                'confidence_vs_impact': '📊 Confidence vs Impact Analysis', 
+                'timeline_distribution': '📈 Timeline Distribution',
+                'dashboard': '📋 Summary Dashboard'
+            }
+            
+            for plot_name, plot_data in supporting_plots.items():
+                title = plot_titles.get(plot_name, plot_name.replace('_', ' ').title())
+                plots_html += f"""
+                <div class="plot-container">
+                    <div class="plot-title">{title}</div>
+                    <img src="{plot_data}" alt="{title}" />
+                </div>
+                """
+            
+            plots_html += "</div>"
+        
+        plots_html += "</div>"
+        return plots_html
+    
+    def _format_insights_html_enhanced(self, insights: List[Dict[str, Any]]) -> str:
+        """Format insights for enhanced HTML display"""
+        if not insights:
+            return "<p>No insights available</p>"
+        
+        html_parts = []
+        for i, insight in enumerate(insights[:8], 1):  # Show top 8 insights
+            importance = insight.get('importance', 0.5)
+            importance_color = '#e74c3c' if importance >= 0.8 else '#f39c12' if importance >= 0.6 else '#3498db'
+            
+            html_parts.append(f"""
+            <div class="insight" style="border-left-color: {importance_color};">
+                <h4>💡 {insight.get('title', 'Unknown Insight')}</h4>
+                <p>{insight.get('description', 'No description available')}</p>
+                <small>
+                    <strong>Type:</strong> {insight.get('type', 'unknown').title()} | 
+                    <strong>Importance:</strong> {importance:.0%} | 
+                    <strong>Category:</strong> {insight.get('category', 'general').title()}
+                </small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
+    
+    def _format_recommendations_html_enhanced(self, recommendations: List[Dict[str, Any]]) -> str:
+        """Format recommendations for enhanced HTML display"""
+        if not recommendations:
+            return "<p>No recommendations available</p>"
+        
+        html_parts = []
+        for i, rec in enumerate(recommendations[:8], 1):  # Show top 8 recommendations
+            priority = rec.get('priority', 'medium').lower()
+            priority_class = f"priority-{priority}"
+            
+            priority_icons = {'high': '🚨', 'medium': '⚠️', 'low': '💡'}
+            icon = priority_icons.get(priority, '📝')
+            
+            html_parts.append(f"""
+            <div class="recommendation {priority_class}">
+                <h4>{icon} {rec.get('title', 'Unknown Recommendation')}</h4>
+                <p>{rec.get('description', 'No description available')}</p>
+                <small>
+                    <strong>Priority:</strong> {priority.title()} | 
+                    <strong>Timeframe:</strong> {rec.get('timeframe', 'N/A')} | 
+                    <strong>Effort:</strong> {rec.get('effort', 'N/A')} |
+                    <strong>Impact:</strong> {rec.get('impact', 'N/A')}
+                </small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
+    
+    def _format_trends_html_enhanced(self, radar_data: List[Dict[str, Any]]) -> str:
+        """Format trend data as enhanced HTML"""
+        if not radar_data:
+            return "<p>No trend data available</p>"
+        
+        html_parts = []
+        
+        for trend in radar_data:
+            confidence = trend.get('confidence', 0.5)
+            impact_level = trend.get('impact_level', 'medium')
+            
+            # Color coding based on impact
+            impact_colors = {
+                'critical': '#e74c3c', 'high': '#f39c12', 
+                'medium': '#3498db', 'low': '#95a5a6'
+            }
+            impact_color = impact_colors.get(impact_level, '#3498db')
+            
+            # Build sources and URLs info
+            sources_info = ""
+            if trend.get('sources'):
+                sources_info += f"<strong>Sources:</strong> {', '.join(trend['sources'][:3])} "
+            if trend.get('urls'):
+                urls_count = len(trend['urls'])
+                sources_info += f"({urls_count} reference{'s' if urls_count != 1 else ''})"
+            
+            html_parts.append(f"""
+            <div class="trend" style="border-left-color: {impact_color};">
+                <h4>{trend.get('title', 'Unknown Trend')}</h4>
+                <p>{trend.get('description', 'No description available')}</p>
+                <small>
+                    <strong>Category:</strong> {trend.get('category', 'N/A').title()} | 
+                    <strong>Impact:</strong> {impact_level.title()} | 
+                    <strong>Confidence:</strong> {confidence:.0%} | 
+                    <strong>Timeline:</strong> {trend.get('time_horizon_label', 'N/A')}
+                    <br>{sources_info}
+                </small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
     
     def _format_insights_html(self, insights: List[Dict[str, Any]]) -> str:
         """Format insights for HTML display"""

@@ -7,6 +7,7 @@ import json
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 from ..agents.data_collector import DataCollectorAgent
 from ..agents.analysis_agent import AnalysisAgent
 from ..agents.visualization_agent import VisualizationAgent

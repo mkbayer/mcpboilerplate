@@ -1,7 +1,7 @@
 """
 Real plotting utilities for creating trend radar visualizations.
 """
-
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import seaborn as sns
@@ -28,7 +28,6 @@ class TrendRadarPlotter:
         logger.info(f"Plotter initialized with output directory: {self.output_dir.absolute()}")
         
         # Set up matplotlib to work without display (for headless systems)
-        import matplotlib
         matplotlib.use('Agg')  # Use non-interactive backend
         
         # Set up matplotlib style

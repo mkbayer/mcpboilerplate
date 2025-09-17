@@ -5,6 +5,7 @@ Real web scraping utilities for collecting trend data from internet sources.
 import asyncio
 import re
 from datetime import datetime, timedelta
+from dateutil import parser
 from typing import Dict, List, Optional, Any
 from urllib.parse import urljoin, urlparse
 import httpx
@@ -292,7 +293,6 @@ class WebScraper:
         
         try:
             # Try to parse various date formats
-            from dateutil import parser
             pub_date = parser.parse(published)
             return (datetime.now() - pub_date.replace(tzinfo=None)) < timedelta(days=30)
         except:

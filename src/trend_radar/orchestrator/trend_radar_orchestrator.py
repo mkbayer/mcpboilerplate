@@ -427,21 +427,37 @@ class TrendRadarOrchestrator:
         
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(csv_data)
-    
+    """
+    Fixed HTML export functionality for Trend Radar Orchestrator
+    Key fixes:
+    1. Proper plot file path resolution
+    2. Correct data structure access for plot files
+    3. Enhanced error handling for missing plots
+    4. Better integration between visualization and reporting stages
+    """
+
     async def _export_to_html(self, results: Dict[str, Any], filepath: str) -> None:
         """Export results to HTML report format with embedded plots"""
         
-        # plots_path = (Path.cwd() / self.plots_dir).resolve()
-        # plot_files = sorted(plots_path.glob("*.png"))
-        # plot_files = {"plot_files": plot_files}
-
-        # Extract key data
+        # Extract key data with proper error handling
         report = results.get("report", {})
         radar_data = results.get("trend_radar", {}).get("data", [])
         statistics = results.get("trend_radar", {}).get("statistics", {})
+        
+        # FIX 1: Access plot files from the correct location in results structure
         visualization_data = results.get("visualization", {})
         plot_files = visualization_data.get("plot_files", {})
-        supporting_plot_files = results.get("trend_radar", {}).get("supporting_plot_files", {})
+        supporting_plot_files = visualization_data.get("supporting_plot_files", {})
+        
+        # FIX 2: Also check trend_radar section for plot files (backup location)
+        if not plot_files and not supporting_plot_files:
+            trend_radar_data = results.get("trend_radar", {})
+            plot_files = trend_radar_data.get("plot_files", {})
+            supporting_plot_files = trend_radar_data.get("supporting_plot_files", {})
+        
+        logger.info(f"Found {len(plot_files)} main plots and {len(supporting_plot_files)} supporting plots")
+        logger.debug(f"Plot files: {plot_files}")
+        logger.debug(f"Supporting plot files: {supporting_plot_files}")
         
         # Generate HTML content with embedded plots
         html_content = self._generate_html_report_with_plots(
@@ -450,6 +466,254 @@ class TrendRadarOrchestrator:
         
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_content)
+        
+        logger.info(f"HTML report exported to {filepath}")
+
+    def _embed_plot_images(self, plot_files: Dict[str, str], supporting_plot_files: Dict[str, str]) -> Dict[str, str]:
+        """Convert plot image files to base64 for HTML embedding"""
+        import base64
+        from pathlib import Path
+        
+        embedded_plots = {}
+        
+        # Combine all plot files
+        all_plots = {**plot_files, **supporting_plot_files}
+        
+        logger.info(f"Attempting to embed {len(all_plots)} plots")
+        
+        for plot_name, plot_path in all_plots.items():
+            if not plot_path:
+                logger.warning(f"Plot {plot_name} has no file path")
+                continue
+                
+            plot_file = Path(plot_path)
+            
+            # FIX 3: Better path resolution and validation
+            if not plot_file.exists():
+                # Try alternative paths
+                alternative_paths = [
+                    Path("plots") / plot_file.name,  # Check plots directory
+                    Path(".") / plot_file.name,      # Check current directory
+                    Path("output") / plot_file.name, # Check output directory
+                ]
+                
+                found_path = None
+                for alt_path in alternative_paths:
+                    if alt_path.exists():
+                        found_path = alt_path
+                        break
+                
+                if found_path:
+                    plot_file = found_path
+                    logger.info(f"Found {plot_name} at alternative path: {plot_file}")
+                else:
+                    logger.warning(f"Plot file not found: {plot_path} (tried alternatives)")
+                    continue
+            
+            # FIX 4: Support multiple image formats
+            if plot_file.suffix.lower() in ['.png', '.jpg', '.jpeg', '.svg']:
+                try:
+                    # Handle SVG files differently
+                    if plot_file.suffix.lower() == '.svg':
+                        with open(plot_file, 'r', encoding='utf-8') as f:
+                            svg_content = f.read()
+                            embedded_plots[plot_name] = f"data:image/svg+xml;base64,{base64.b64encode(svg_content.encode()).decode()}"
+                    else:
+                        # Handle raster images
+                        with open(plot_file, 'rb') as f:
+                            image_data = base64.b64encode(f.read()).decode('utf-8')
+                            mime_type = 'image/png' if plot_file.suffix.lower() == '.png' else 'image/jpeg'
+                            embedded_plots[plot_name] = f"data:{mime_type};base64,{image_data}"
+                    
+                    logger.info(f"Successfully embedded plot: {plot_name} ({plot_file.stat().st_size} bytes)")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to embed plot {plot_name}: {e}")
+                    embedded_plots[plot_name] = None
+            else:
+                logger.warning(f"Unsupported image format for {plot_name}: {plot_file.suffix}")
+        
+        logger.info(f"Successfully embedded {len([p for p in embedded_plots.values() if p])} plots")
+        return embedded_plots
+
+    def _generate_plots_section_html(self, embedded_plots: Dict[str, str]) -> str:
+        """Generate the plots section with embedded images"""
+        
+        # FIX 5: Better handling of missing plots
+        valid_plots = {k: v for k, v in embedded_plots.items() if v is not None}
+        
+        if not valid_plots:
+            return """
+            <div class="section plots-section">
+                <h2>📊 Visualizations</h2>
+                <div class="interactive-note" style="background: #fff3cd; border-color: #ffc107; color: #856404;">
+                    ⚠️ <strong>Note:</strong> Visualization plots were not found or could not be embedded. 
+                    Check the plots directory for separate image files.
+                </div>
+            </div>
+            """
+        
+        plots_html = f"""
+        <div class="section plots-section">
+            <h2>📊 Visualizations</h2>
+            <div class="interactive-note">
+                📱 <strong>Interactive versions:</strong> Look for *_interactive.html files in the plots directory for fully interactive charts!
+                <br>📈 <strong>Embedded plots:</strong> {len(valid_plots)} visualization(s) included below.
+            </div>
+        """
+        
+        # FIX 6: Prioritize main radar plot
+        if 'main_radar' in valid_plots:
+            plots_html += f"""
+            <div class="plot-container">
+                <div class="plot-title">🎯 Main Trend Radar Chart</div>
+                <img src="{valid_plots['main_radar']}" alt="Trend Radar Chart" />
+                <p style="margin-top: 15px; color: #7f8c8d; font-style: italic;">
+                    Interactive quadrant view showing trends positioned by impact level (Y-axis) and time horizon (X-axis). 
+                    Point size represents confidence level.
+                </p>
+            </div>
+            """
+        
+        # FIX 7: Handle radar_chart as fallback for main_radar
+        elif 'radar_chart' in valid_plots:
+            plots_html += f"""
+            <div class="plot-container">
+                <div class="plot-title">🎯 Trend Radar Chart</div>
+                <img src="{valid_plots['radar_chart']}" alt="Trend Radar Chart" />
+                <p style="margin-top: 15px; color: #7f8c8d; font-style: italic;">
+                    Trend radar visualization showing impact vs timeline positioning.
+                </p>
+            </div>
+            """
+        
+        # Supporting plots in a grid
+        supporting_plots = {k: v for k, v in valid_plots.items() 
+                        if k not in ['main_radar', 'radar_chart'] and v}
+        
+        if supporting_plots:
+            plots_html += '<div class="grid">'
+            
+            # FIX 8: Enhanced plot titles with better mapping
+            plot_titles = {
+                'category_distribution': '🥧 Trend Categories',
+                'confidence_vs_impact': '📊 Confidence vs Impact', 
+                'timeline_distribution': '📈 Timeline Analysis',
+                'dashboard': '📋 Analysis Dashboard',
+                'impact_distribution': '🎯 Impact Distribution',
+                'quadrant_analysis': '🔄 Quadrant Analysis',
+                'trend_timeline': '⏰ Trend Timeline',
+                'category_impact': '📊 Category Impact Analysis'
+            }
+            
+            for plot_name, plot_data in supporting_plots.items():
+                title = plot_titles.get(plot_name, plot_name.replace('_', ' ').title())
+                plots_html += f"""
+                <div class="plot-container">
+                    <div class="plot-title">{title}</div>
+                    <img src="{plot_data}" alt="{title}" style="max-height: 400px;" />
+                </div>
+                """
+            
+            plots_html += "</div>"
+        
+        plots_html += "</div>"
+        return plots_html
+
+    # FIX 9: Update _integrate_pipeline_results to properly pass plot files
+    def _integrate_pipeline_results(
+        self, 
+        pipeline_results: Dict[str, Any], 
+        config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Integrate results from all pipeline stages"""
+        
+        # Extract key components
+        data_collection = pipeline_results.get("data_collection", {})
+        trend_analysis = pipeline_results.get("trend_analysis", {})
+        visualization = pipeline_results.get("visualization", {})
+        report = pipeline_results.get("report", {})
+        
+        # FIX: Ensure plot files are properly included in the integrated results
+        visualization_config = visualization.get("visualization_config", {})
+        plot_files = visualization.get("plot_files", {})
+        supporting_plot_files = visualization.get("supporting_plot_files", {})
+        
+        # Create integrated result structure
+        integrated_results = {
+            "processing_complete": True,
+            "trend_radar": {
+                "data": visualization.get("radar_data", []),
+                "configuration": visualization_config,
+                "supporting_charts": visualization.get("supporting_charts", {}),
+                "statistics": visualization.get("statistics", {}),
+                # FIX: Include plot files in trend_radar section for HTML export
+                "plot_files": plot_files,
+                "supporting_plot_files": supporting_plot_files
+            },
+            "analysis": {
+                "analyzed_trends": trend_analysis.get("analyzed_trends", []),
+                "cross_analysis": trend_analysis.get("cross_analysis", {}),
+                "analysis_summary": trend_analysis.get("analysis_summary", {}),
+                "quality_metrics": trend_analysis.get("quality_metrics", {})
+            },
+            "visualization": visualization,  # FIX: Include full visualization data
+            "report": report,
+            "data_collection_metadata": {
+                "trends_collected": len(data_collection.get("raw_trends", [])),
+                "sources_queried": data_collection.get("collection_metadata", {}).get("sources_queried", []),
+                "collection_quality": data_collection.get("quality_metrics", {})
+            },
+            "pipeline_summary": {
+                "stages_completed": len(pipeline_results),
+                "total_trends_processed": len(trend_analysis.get("analyzed_trends", [])),
+                "visualization_points": len(visualization.get("radar_data", [])),
+                "insights_generated": len(report.get("key_insights", [])),
+                "recommendations_provided": len(report.get("strategic_recommendations", [])),
+                "plots_generated": len(plot_files) + len(supporting_plot_files)
+            }
+        }
+        
+        return integrated_results
+
+    # FIX 10: Add diagnostic method to check plot availability
+    def diagnose_plot_files(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Diagnose plot file availability for troubleshooting"""
+        
+        diagnostic_info = {
+            "plot_locations_checked": [],
+            "files_found": [],
+            "files_missing": [],
+            "data_structure": {}
+        }
+        
+        # Check visualization section
+        visualization = results.get("visualization", {})
+        if visualization:
+            diagnostic_info["data_structure"]["visualization"] = list(visualization.keys())
+            
+            plot_files = visualization.get("plot_files", {})
+            supporting_plots = visualization.get("supporting_plot_files", {})
+            
+            diagnostic_info["plot_locations_checked"].extend([
+                f"visualization.plot_files: {len(plot_files)} entries",
+                f"visualization.supporting_plot_files: {len(supporting_plots)} entries"
+            ])
+            
+            # Check if files actually exist
+            from pathlib import Path
+            for plot_name, plot_path in {**plot_files, **supporting_plots}.items():
+                if plot_path and Path(plot_path).exists():
+                    diagnostic_info["files_found"].append(f"{plot_name}: {plot_path}")
+                else:
+                    diagnostic_info["files_missing"].append(f"{plot_name}: {plot_path}")
+        
+        # Check trend_radar section
+        trend_radar = results.get("trend_radar", {})
+        if trend_radar:
+            diagnostic_info["data_structure"]["trend_radar"] = list(trend_radar.keys())
+        
+        return diagnostic_info
     
     def _generate_html_report_with_plots(
         self, 

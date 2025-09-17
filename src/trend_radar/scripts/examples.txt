@@ -6,4 +6,3 @@
 ./run.sh analyze "future of remote work" --depth deep --output-format html
 
 ./run.sh analyze "green tech" --output-file my_analysis --output-format html
-

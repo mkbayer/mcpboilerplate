@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 class TrendRadarOrchestrator:
     """Main orchestrator that coordinates all MCP agents"""
     
-    def __init__(self, llm_config: Optional[Dict[str, Any]] = None):
+    def __init__(self, llm_config: Optional[Dict[str, Any]] = None, **kwargs):
         """
         Initialize orchestrator with agent coordination capabilities
         
@@ -29,6 +29,10 @@ class TrendRadarOrchestrator:
             llm_config: Configuration for LLM endpoints and models
         """
         self.session_id = str(uuid.uuid4())
+        # Initialize plotter for actual visualization generation
+        plots_dir = kwargs.get('plots_dir', 'plots')
+        self.plots_dir = Path(plots_dir)
+
         self.llm_config = llm_config or {
             "base_url": "http://localhost:11434",
             "model": "gpt-oss:20b"
@@ -238,7 +242,7 @@ class TrendRadarOrchestrator:
                 "analyzed_trends": analysis_result.get("analyzed_trends", []),
                 "type": config.get("viz_type", "radar"),
                 "config": config.get("viz_config", {}),
-                "task_id": f"{correlation_id}_visualization"
+                "task_id": f"{correlation_id}_visualization",
             }
             
             logger.debug(f"Visualization task: {len(visualization_task['analyzed_trends'])} trends to visualize")
@@ -371,7 +375,7 @@ class TrendRadarOrchestrator:
     async def export_results(
         self, 
         results: Dict[str, Any], 
-        export_format: str = "json",
+        export_format: str = "html",
         filename: Optional[str] = None
     ) -> str:
         """
@@ -427,11 +431,16 @@ class TrendRadarOrchestrator:
     async def _export_to_html(self, results: Dict[str, Any], filepath: str) -> None:
         """Export results to HTML report format with embedded plots"""
         
+        # plots_path = (Path.cwd() / self.plots_dir).resolve()
+        # plot_files = sorted(plots_path.glob("*.png"))
+        # plot_files = {"plot_files": plot_files}
+
         # Extract key data
         report = results.get("report", {})
         radar_data = results.get("trend_radar", {}).get("data", [])
         statistics = results.get("trend_radar", {}).get("statistics", {})
-        plot_files = results.get("trend_radar", {}).get("plot_files", {})
+        visualization_data = results.get("visualization", {})
+        plot_files = visualization_data.get("plot_files", {})
         supporting_plot_files = results.get("trend_radar", {}).get("supporting_plot_files", {})
         
         # Generate HTML content with embedded plots
@@ -604,7 +613,6 @@ class TrendRadarOrchestrator:
                             <div class="metric-label">Recommendations</div>
                         </div>
                     </div>
-                    
                     {self._generate_plots_section_html(embedded_plots)}
                     
                     <div class="section insights-section">

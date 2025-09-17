@@ -5,15 +5,17 @@ Reporting Agent - Responsible for generating comprehensive reports and strategic
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import json
+from pathlib import Path
 from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
 
 class ReportingAgent(MCPAgent):
     """Agent specialized in generating reports, insights, and strategic recommendations"""
     
-    def __init__(self, llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
+    def __init__(self, plots_dir: str = "plots", llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
         super().__init__("reporting_agent", llm_base_url=llm_base_url, model_name=model_name)
-        
+        self.plots_dir = Path(plots_dir)
+
         # Report templates and formats
         self.report_templates = {
             "executive": "executive_summary",

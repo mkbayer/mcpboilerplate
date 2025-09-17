@@ -1,0 +1,9 @@
+./run.sh analyze "multi agent applications" --depth deep --report-type comprehensive  --output-file my_analysis --output-format html
+
+
+./run.sh analyze "multi agent mcp applications" --depth deep --report-type comprehensive  --output-file my_analysis --output-format html
+
+./run.sh analyze "future of remote work" --depth deep --output-format html
+
+./run.sh analyze "green tech" --output-file my_analysis --output-format html
+

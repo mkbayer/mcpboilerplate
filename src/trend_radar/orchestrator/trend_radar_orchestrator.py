@@ -633,6 +633,74 @@ class TrendRadarOrchestrator:
         
         return html_template
     
+    def _format_insights_html(self, insights: List[Dict[str, Any]]) -> str:
+        """Format insights for HTML display"""
+        if not insights:
+            return "<p>No insights available</p>"
+        
+        html_parts = []
+        for insight in insights[:5]:  # Top 5 insights
+            html_parts.append(f"""
+            <div class="trend">
+                <h4>{insight.get('title', 'Unknown Insight')}</h4>
+                <p>{insight.get('description', 'No description available')}</p>
+                <small>Type: {insight.get('type', 'unknown')} | Importance: {insight.get('importance', 'N/A')}</small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
+    
+    def _format_recommendations_html(self, recommendations: List[Dict[str, Any]]) -> str:
+        """Format recommendations for HTML display"""
+        if not recommendations:
+            return "<p>No recommendations available</p>"
+        
+        html_parts = []
+        for rec in recommendations[:5]:  # Top 5 recommendations
+            html_parts.append(f"""
+            <div class="trend">
+                <h4>{rec.get('title', 'Unknown Recommendation')}</h4>
+                <p>{rec.get('description', 'No description available')}</p>
+                <small>Priority: {rec.get('priority', 'medium')} | Timeframe: {rec.get('timeframe', 'N/A')} | Effort: {rec.get('effort', 'N/A')}</small>
+            </div>
+            """)
+        
+        return "".join(html_parts)
+    
+    def _format_trends_html(self, radar_data: List[Dict[str, Any]]) -> str:
+        """Format trend data as HTML table"""
+        if not radar_data:
+            return "<p>No trend data available</p>"
+        
+        table_rows = []
+        for trend in radar_data[:10]:  # Top 10 trends
+            table_rows.append(f"""
+            <tr>
+                <td>{trend.get('title', 'Unknown')}</td>
+                <td>{trend.get('category', 'N/A')}</td>
+                <td>{trend.get('y', 'N/A')}</td>
+                <td>{trend.get('confidence', 'N/A')}</td>
+                <td>{trend.get('time_horizon_label', 'N/A')}</td>
+            </tr>
+            """)
+        
+        return f"""
+        <table>
+            <thead>
+                <tr>
+                    <th>Trend</th>
+                    <th>Category</th>
+                    <th>Impact</th>
+                    <th>Confidence</th>
+                    <th>Time Horizon</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join(table_rows)}
+            </tbody>
+        </table>
+        """
+    
     def _embed_plot_images(self, plot_files: Dict[str, str], supporting_plot_files: Dict[str, str]) -> Dict[str, str]:
         """Convert plot image files to base64 for HTML embedding"""
         import base64

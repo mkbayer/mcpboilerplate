@@ -1,14 +1,15 @@
-
 """
 Visualization Agent - Responsible for creating trend radar visualizations and data representations.
 """
 
 from datetime import datetime
 from typing import Dict, Any, List, Tuple
+from pathlib import Path
 import json
 from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
 from ..models.trend import RadarPoint
+from ..utils.plotter import TrendRadarPlotter
 
 
 class VisualizationAgent(MCPAgent):
@@ -16,6 +17,10 @@ class VisualizationAgent(MCPAgent):
     
     def __init__(self, llm_base_url: str = "http://localhost:11434", model_name: str = "gpt-oss:20b", **kwargs):
         super().__init__("visualization_agent", llm_base_url=llm_base_url, model_name=model_name)
+        
+        # Initialize plotter for actual visualization generation
+        plots_dir = kwargs.get('plots_dir', 'plots')
+        self.plotter = TrendRadarPlotter(output_dir=plots_dir)
         
         # Visualization configuration
         self.color_schemes = {
@@ -48,6 +53,13 @@ class VisualizationAgent(MCPAgent):
                 confidence_level=0.85
             ),
             AgentCapability(
+                name="plot_file_generation",
+                description="Generate actual plot image files from visualization data",
+                input_types=["radar_data", "supporting_data"],
+                output_types=["plot_files", "interactive_plots"],
+                confidence_level=0.9
+            ),
+            AgentCapability(
                 name="interactive_dashboard",
                 description="Generate interactive dashboard configurations",
                 input_types=["multi_dataset", "dashboard_params"],
@@ -78,7 +90,7 @@ class VisualizationAgent(MCPAgent):
             task: Dictionary containing analyzed trends and visualization parameters
             
         Returns:
-            Dictionary with visualization data, configurations, and statistics
+            Dictionary with visualization data, configurations, statistics, and actual plot files
         """
         analyzed_trends = task.get("analyzed_trends", [])
         viz_type = task.get("type", "radar")  # radar, dashboard, report
@@ -87,41 +99,166 @@ class VisualizationAgent(MCPAgent):
         self.logger.info(f"Starting visualization generation for {len(analyzed_trends)} trends")
         self.update_progress(0.1, "Initializing visualization pipeline")
         
-        # Generate radar chart data
-        self.update_progress(0.3, "Creating radar chart data")
-        radar_data = await self._create_radar_data(analyzed_trends)
-        
-        # Generate visualization configuration
-        self.update_progress(0.5, "Generating visualization configuration")
-        viz_config = await self._create_visualization_config(analyzed_trends, custom_config)
-        
-        # Generate supporting charts and statistics
-        self.update_progress(0.7, "Creating supporting visualizations")
-        supporting_charts = await self._create_supporting_charts(analyzed_trends)
-        
-        # Calculate visualization statistics
-        self.update_progress(0.9, "Calculating visualization statistics")
-        viz_statistics = self._calculate_visualization_statistics(analyzed_trends, radar_data)
-        
-        # Compile visualization results
-        visualization_result = {
-            "radar_data": radar_data,
-            "visualization_config": viz_config,
-            "supporting_charts": supporting_charts,
-            "statistics": viz_statistics,
-            "metadata": {
-                "trends_visualized": len(analyzed_trends),
-                "visualization_type": viz_type,
-                "generated_at": datetime.now().isoformat(),
-                "chart_dimensions": self.chart_dimensions,
-                "color_scheme": self.color_schemes
+        try:
+            # Generate radar chart data
+            self.update_progress(0.2, "Creating radar chart data")
+            radar_data = await self._create_radar_data(analyzed_trends)
+            
+            # Generate visualization configuration
+            self.update_progress(0.3, "Generating visualization configuration")
+            viz_config = await self._create_visualization_config(analyzed_trends, custom_config)
+            
+            # Generate supporting charts and statistics
+            self.update_progress(0.4, "Creating supporting visualizations")
+            supporting_charts = await self._create_supporting_charts(analyzed_trends)
+            
+            # Calculate visualization statistics
+            self.update_progress(0.5, "Calculating visualization statistics")
+            viz_statistics = self._calculate_visualization_statistics(analyzed_trends, radar_data)
+            
+            # Generate actual plot files using TrendRadarPlotter
+            self.update_progress(0.7, "Generating plot files")
+            plot_files = await self._generate_plot_files(radar_data, supporting_charts, viz_statistics)
+            
+            # Generate supporting plot files
+            self.update_progress(0.9, "Generating supporting plots")
+            supporting_plot_files = await self._generate_supporting_plot_files(supporting_charts, radar_data)
+            
+            # Compile visualization results
+            visualization_result = {
+                "radar_data": radar_data,
+                "visualization_config": viz_config,
+                "supporting_charts": supporting_charts,
+                "statistics": viz_statistics,
+                "plot_files": plot_files,
+                "supporting_plot_files": supporting_plot_files,
+                "metadata": {
+                    "trends_visualized": len(analyzed_trends),
+                    "visualization_type": viz_type,
+                    "generated_at": datetime.now().isoformat(),
+                    "chart_dimensions": self.chart_dimensions,
+                    "color_scheme": self.color_schemes,
+                    "plots_directory": str(self.plotter.output_dir),
+                    "total_plot_files": len(plot_files) + len(supporting_plot_files)
+                }
             }
-        }
+            
+            self.update_progress(1.0, "Visualization generation completed")
+            self.logger.info(f"Generated visualization with {len(plot_files)} main plots and {len(supporting_plot_files)} supporting plots")
+            
+            return visualization_result
+            
+        except Exception as e:
+            self.logger.error(f"Visualization generation failed: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Return minimal result to prevent pipeline failure
+            return {
+                "radar_data": radar_data if 'radar_data' in locals() else [],
+                "visualization_config": {},
+                "supporting_charts": {},
+                "statistics": {},
+                "plot_files": {},
+                "supporting_plot_files": {},
+                "error": str(e),
+                "metadata": {
+                    "trends_visualized": len(analyzed_trends),
+                    "visualization_type": viz_type,
+                    "generated_at": datetime.now().isoformat(),
+                    "error_occurred": True
+                }
+            }
+    
+    async def _generate_plot_files(
+        self, 
+        radar_data: List[Dict[str, Any]], 
+        supporting_charts: Dict[str, Any],
+        viz_statistics: Dict[str, Any]
+    ) -> Dict[str, str]:
+        """Generate actual plot image files using TrendRadarPlotter"""
         
-        self.update_progress(1.0, "Visualization generation completed")
-        self.logger.info(f"Generated visualization data for {len(analyzed_trends)} trends")
+        plot_files = {}
         
-        return visualization_result
+        try:
+            if radar_data:
+                # Generate main radar plot
+                self.logger.info("Generating main radar plot")
+                radar_plot_path = self.plotter.create_trend_radar(
+                    radar_data=radar_data,
+                    title="Trend Radar Analysis"
+                )
+                
+                if radar_plot_path and Path(radar_plot_path).exists():
+                    plot_files['main_radar'] = radar_plot_path
+                    self.logger.info(f"Main radar plot saved: {radar_plot_path}")
+                else:
+                    self.logger.warning("Failed to generate main radar plot")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate main radar plot: {e}")
+        
+        return plot_files
+    
+    async def _generate_supporting_plot_files(
+        self, 
+        supporting_charts: Dict[str, Any], 
+        radar_data: List[Dict[str, Any]]
+    ) -> Dict[str, str]:
+        """Generate supporting plot files"""
+        
+        supporting_plot_files = {}
+        
+        try:
+            if supporting_charts and radar_data:
+                # Prepare supporting data for plotter
+                supporting_data = self._prepare_supporting_data_for_plotter(supporting_charts)
+                
+                self.logger.info("Generating supporting charts")
+                generated_plots = self.plotter.create_supporting_charts(
+                    supporting_data=supporting_data,
+                    radar_data=radar_data
+                )
+                
+                if generated_plots:
+                    supporting_plot_files.update(generated_plots)
+                    self.logger.info(f"Generated {len(generated_plots)} supporting plots")
+                else:
+                    self.logger.warning("No supporting plots were generated")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate supporting plots: {e}")
+        
+        return supporting_plot_files
+    
+    def _prepare_supporting_data_for_plotter(self, supporting_charts: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert supporting charts data to format expected by plotter"""
+        
+        plotter_data = {}
+        
+        # Category distribution
+        if 'category_distribution' in supporting_charts:
+            cat_data = supporting_charts['category_distribution']['data']
+            plotter_data['category_distribution'] = {
+                label['label']: label['value'] for label in cat_data
+            }
+        
+        # Timeline distribution
+        if 'timeline_distribution' in supporting_charts:
+            timeline_data = supporting_charts['timeline_distribution']['data']
+            plotter_data['timeline_distribution'] = {
+                label['label'].lower().replace(' ', '_'): {'count': label['value']} 
+                for label in timeline_data
+            }
+        
+        # Impact distribution
+        if 'impact_distribution' in supporting_charts:
+            impact_data = supporting_charts['impact_distribution']['data']
+            plotter_data['impact_distribution'] = {
+                label['label'].lower(): label['value'] for label in impact_data
+            }
+        
+        return plotter_data
     
     async def _create_radar_data(self, analyzed_trends: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert analyzed trends to radar chart format"""
@@ -138,7 +275,7 @@ class VisualizationAgent(MCPAgent):
             
             # Calculate point size based on confidence
             confidence = trend.get('confidence_score', 0.5)
-            point_size = max(5, min(30, confidence * 25 + 5))
+            point_size = max(10, min(50, confidence * 40 + 10))  # Size range 10-50
             
             # Create radar point
             radar_point = RadarPoint(
@@ -252,11 +389,14 @@ class VisualizationAgent(MCPAgent):
         Format: QUADRANT_NAME: description
         """
         
-        response = await self.query_llm(
-            prompt=prompt,
-            temperature=0.7,
-            max_tokens=200
-        )
+        try:
+            response = await self.query_llm(
+                prompt=prompt,
+                temperature=0.7,
+                max_tokens=200
+            )
+        except:
+            response = ""  # Use defaults if LLM fails
         
         # Parse or use defaults
         quadrants = [

@@ -46,7 +46,7 @@ async def debug_visualization_step_by_step():
     # Step 2: Test TrendRadarPlotter
     print("\n2. Testing TrendRadarPlotter...")
     try:
-        from utils.plotter import TrendRadarPlotter
+        from  ..utils.plotter import TrendRadarPlotter
         
         plotter = TrendRadarPlotter()
         print(f"   ✅ Plotter created, output dir: {plotter.output_dir.absolute()}")

@@ -31,7 +31,7 @@ class ReportingAgent(MCPAgent):
             "risk_opportunity_matrix"
         ]
     
-    def _define_capabilities(self) -> List[AgentCapability]:
+    def _define_capabilities(self) -> List[AgentCapability]:  # Changed from _define_capabilities
         """Define reporting and insight capabilities"""
         return [
             AgentCapability(
@@ -315,7 +315,6 @@ class ReportingAgent(MCPAgent):
         
         return self._parse_llm_insights(response, "pattern")
     
-
     def _format_category_breakdown(self, categories: Dict[str, List]) -> str:
         """Format category breakdown for LLM analysis"""
         breakdown = []
@@ -323,16 +322,17 @@ class ReportingAgent(MCPAgent):
             avg_impact = sum(t.get('y', 2) for t in trends) / len(trends)
             avg_confidence = sum(t.get('confidence', 0.5) for t in trends) / len(trends)
             breakdown.append(f"• {cat.title()}: {len(trends)} trends, avg impact {avg_impact:.1f}, avg confidence {avg_confidence:.1%}")
-
-
-    def _format_coordinate_distribution(self, radar_data: List[Dict[str, Any]]) -> str:
-            """Format coordinate distribution for analysis"""
-            x_coords = [t.get('x', 3) for t in radar_data]
-            y_coords = [t.get('y', 2) for t in radar_data]
-            
-            return f"X (Time): min={min(x_coords)}, max={max(x_coords)}, avg={sum(x_coords)/len(x_coords):.1f}\n" + \
-                f"Y (Impact): min={min(y_coords)}, max={max(y_coords)}, avg={sum(y_coords)/len(y_coords):.1f}"
         
+        return "\n".join(breakdown)
+    
+    def _format_coordinate_distribution(self, radar_data: List[Dict[str, Any]]) -> str:
+        """Format coordinate distribution for analysis"""
+        x_coords = [t.get('x', 3) for t in radar_data]
+        y_coords = [t.get('y', 2) for t in radar_data]
+        
+        return f"X (Time): min={min(x_coords)}, max={max(x_coords)}, avg={sum(x_coords)/len(x_coords):.1f}\n" + \
+               f"Y (Impact): min={min(y_coords)}, max={max(y_coords)}, avg={sum(y_coords)/len(y_coords):.1f}"
+    
     def _extract_comparative_insights(
         self, 
         radar_data: List[Dict[str, Any]], 
@@ -1064,7 +1064,6 @@ class ReportingAgent(MCPAgent):
         
         return report
     
-
     def _create_methodology_section(self) -> Dict[str, Any]:
         """Create methodology documentation"""
         return {
@@ -1095,4 +1094,4 @@ class ReportingAgent(MCPAgent):
             "Tactical Moves": "Low-impact, near-term actions",
             "Background Noise": "Low-impact, long-term monitoring items"
         }
-
+    

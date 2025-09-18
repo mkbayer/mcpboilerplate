@@ -1,12 +1,12 @@
 """
 Data Collector Agent - Responsible for gathering trend data from various sources.
 """
-
+import requests
 from datetime import datetime
 from typing import Dict, Any, List
 from ..agents.base_agent import MCPAgent
 from ..models.mcp_message import AgentCapability
-from ..utils.web_scraper import WebScraper
+from ..utils.web_scraper import EnhancedWebScraper
 
 
 class DataCollectorAgent(MCPAgent):
@@ -89,7 +89,7 @@ class DataCollectorAgent(MCPAgent):
         self.update_progress(0.1, "Initializing data collection")
         
         try:
-            # Step 1: Collect real web data using WebScraper
+            # Step 1: Collect real web data using EnhancedWebScraper
             web_trends = await self._collect_web_trends(query, collection_depth)
             self.update_progress(0.3, "Web trends collected")
             
@@ -163,7 +163,7 @@ class DataCollectorAgent(MCPAgent):
             return fallback_result
     
     async def _collect_web_trends(self, query: str, depth: str) -> List[Dict[str, Any]]:
-        """Collect real trends from web sources using WebScraper"""
+        """Collect real trends from web sources using EnhancedWebScraper"""
         web_trends = []
         
         try:
@@ -180,8 +180,8 @@ class DataCollectorAgent(MCPAgent):
             
             self.logger.info(f"Collecting web trends: {search_categories}, max_articles: {max_articles}")
             
-            # Use WebScraper to collect real data
-            async with WebScraper() as scraper:
+            # Use EnhancedWebScraper to collect real data
+            async with EnhancedWebScraper() as scraper:
                 web_trends = await scraper.collect_trends(
                     query=query,
                     categories=search_categories,

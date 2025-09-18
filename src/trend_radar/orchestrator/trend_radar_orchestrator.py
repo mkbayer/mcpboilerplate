@@ -5,6 +5,7 @@ Trend Radar Orchestrator - Main coordination system for MCP agents.
 import asyncio
 import json
 import uuid
+import requests
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
